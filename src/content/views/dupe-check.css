@@ -1,0 +1,202 @@
+/* 插件专用样式文件 - 防止影响页面样式 */
+
+/* 为插件组件创建独立的样式作用域 */
+.mesoor-extension-container {
+  /* 重置所有可能被页面样式影响的属性 */
+  all: initial;
+
+  /* 基础字体和显示设置 */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  /* 确保插件容器的基本显示属性 */
+  position: fixed !important;
+  top: 256px !important;
+  right: 0 !important;
+  z-index: 2147483640 !important;
+
+  /* 基础颜色变量，只在插件容器内生效 - 使用原有主题色 */
+  --mesoor-primary: oklch(0.623 0.214 259.815);
+  --mesoor-primary-foreground: oklch(0.97 0.014 254.604);
+  --mesoor-secondary: oklch(0.967 0.001 286.375);
+  --mesoor-secondary-foreground: oklch(0.21 0.006 285.885);
+  --mesoor-border: oklch(0.92 0.004 286.32);
+  --mesoor-background: oklch(1 0 0);
+  --mesoor-foreground: oklch(0.141 0.005 285.823);
+  --mesoor-muted: oklch(0.967 0.001 286.375);
+  --mesoor-muted-foreground: oklch(0.552 0.016 285.938);
+  --mesoor-destructive: oklch(0.577 0.245 27.325);
+  --mesoor-success: oklch(0.646 0.222 41.116);
+  --mesoor-warning: oklch(0.828 0.189 84.429);
+  --mesoor-ring: oklch(0.623 0.214 259.815);
+  --mesoor-radius: 0.65rem;
+}
+
+/* 基础重置样式，只影响插件内的元素 */
+.mesoor-extension-container *,
+.mesoor-extension-container *::before,
+.mesoor-extension-container *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--mesoor-border);
+}
+
+/* 插件专用的实用类 */
+.mesoor-extension-container .mesoor-card {
+  background-color: var(--mesoor-primary);
+  border-radius: 9999px 0 0 9999px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  min-width: 176px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border: none;
+  outline: none;
+}
+
+.mesoor-extension-container .mesoor-card:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: scale(1.05);
+}
+
+.mesoor-extension-container .mesoor-card.dragging {
+  cursor: grabbing;
+  transform: none;
+}
+
+.mesoor-extension-container .mesoor-icon-container {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.mesoor-extension-container .mesoor-text {
+  flex: 1;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.mesoor-extension-container .mesoor-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.mesoor-extension-container .mesoor-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.15s ease-in-out;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mesoor-extension-container .mesoor-button-primary {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  background-color: var(--mesoor-secondary);
+  color: var(--mesoor-secondary-foreground);
+}
+
+.mesoor-extension-container .mesoor-button-primary:hover {
+  background-color: #e2e8f0;
+}
+
+.mesoor-extension-container .mesoor-button-ghost {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: #ffffff;
+  background-color: transparent;
+}
+
+.mesoor-extension-container .mesoor-button-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 图标样式 */
+.mesoor-extension-container .mesoor-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+}
+
+.mesoor-extension-container .mesoor-icon-spin {
+  animation: mesoor-spin 1s linear infinite;
+}
+
+.mesoor-extension-container .mesoor-icon-red {
+  color: var(--mesoor-destructive);
+}
+
+.mesoor-extension-container .mesoor-icon-green {
+  color: var(--mesoor-success);
+}
+
+.mesoor-extension-container .mesoor-icon-orange {
+  color: var(--mesoor-warning);
+}
+
+.mesoor-extension-container .mesoor-icon-violet {
+  color: var(--mesoor-primary);
+}
+
+.mesoor-extension-container .mesoor-icon-primary {
+  color: var(--mesoor-primary);
+}
+
+/* 动画 */
+@keyframes mesoor-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 过渡动画 */
+.mesoor-extension-container .mesoor-transition {
+  transition: all 0.2s ease-in-out;
+}
+
+/* 确保插件样式不被页面样式覆盖 */
+.mesoor-extension-container {
+  font-style: normal !important;
+  font-variant: normal !important;
+  font-weight: normal !important;
+  font-stretch: normal !important;
+  line-height: normal !important;
+  font-size: 14px !important;
+  text-align: left !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+  text-indent: 0 !important;
+  text-shadow: none !important;
+  color: var(--mesoor-foreground) !important;
+}
