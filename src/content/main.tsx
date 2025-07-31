@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { ModernDupeCheck } from "./views/dupe-check";
+import { DupeCheck } from "./views/dupe-check";
 
 console.log("[CRXJS] Hello world from content script!");
 
@@ -9,6 +9,6 @@ container.id = "crxjs-app";
 document.body.appendChild(container);
 createRoot(container).render(
   <StrictMode>
-    <ModernDupeCheck />
+    <DupeCheck />
   </StrictMode>
 );

@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import {
   AlertDialog,
@@ -29,7 +23,6 @@ declare global {
 
 interface SettingsState {
   autoSync: boolean;
-  showPrompt: boolean;
 }
 
 interface VersionInfo {
@@ -98,7 +91,6 @@ function compareVersions(
 const SettingsContainer: React.FC = () => {
   const [settings, setSettings] = useState<SettingsState>({
     autoSync: false,
-    showPrompt: true,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [latestVersion, setLatestVersion] = useState<VersionInfo | null>(null);
@@ -128,15 +120,12 @@ const SettingsContainer: React.FC = () => {
     const loadSettings = async () => {
       try {
         const result = await (window as any).browser?.storage?.sync?.get([
-          "autoSync",
-          "showPrompt",
+          "wait",
         ]);
 
         if (result) {
           setSettings({
-            autoSync: result.autoSync || false,
-            showPrompt:
-              result.showPrompt !== undefined ? result.showPrompt : true,
+            autoSync: result.wait?.isSyncWait || false,
           });
         }
       } catch (error) {
@@ -152,7 +141,9 @@ const SettingsContainer: React.FC = () => {
   // 保存设置
   const saveSettings = async (newSettings: SettingsState) => {
     try {
-      await (window as any).browser?.storage?.sync?.set(newSettings);
+      await (window as any).browser?.storage?.sync?.set({
+        wait: { isSyncWait: newSettings.autoSync },
+      });
       setSettings(newSettings);
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -276,58 +267,44 @@ const SettingsContainer: React.FC = () => {
   }
 
   return (
-    <>
-      <style>
-        {`
-          .hide-scrollbar::-webkit-scrollbar {
-            display: none !important;
-            width: 0 !important;
-            height: 0 !important;
-          }
-          .hide-scrollbar {
-            -ms-overflow-style: none !important;
-            scrollbar-width: none !important;
-          }
-        `}
-      </style>
-      <div className="h-full bg-background overflow-y-auto hide-scrollbar">
-        {/* 头部 */}
-        <div className="bg-background px-6 py-4">
-          <h1 className="text-xl font-semibold ">⚙️ 插件设置</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            配置您的插件偏好设置
-          </p>
-        </div>
+    <div className="h-full bg-background overflow-y-auto">
+      {/* 头部 */}
+      <div className="bg-background px-6 py-4">
+        <h1 className="text-xl font-semibold ">⚙️ 插件设置</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          配置您的插件偏好设置
+        </p>
+      </div>
 
-        {/* 设置内容 */}
-        <div className="p-6 space-y-6">
-          {/* 简历同步设置 */}
-          <Card className="gap-4">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center">
-                <span className="mr-2">📄</span>
-                简历同步设置
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* 自动同步开关 */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-foreground">
-                    浏览简历自动入库
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    自动将浏览的简历同步到人才库中
-                  </div>
+      {/* 设置内容 */}
+      <div className="p-6 space-y-6">
+        {/* 简历同步设置 */}
+        <Card className="gap-4">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center">
+              <span className="mr-2">📄</span>
+              简历同步设置
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 自动同步开关 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-base font-medium text-foreground">
+                  浏览简历自动入库
                 </div>
-                <Switch
-                  checked={settings.autoSync}
-                  onCheckedChange={() => handleToggle("autoSync")}
-                />
+                <div className="text-sm text-muted-foreground">
+                  自动将浏览的简历同步到人才库中
+                </div>
               </div>
+              <Switch
+                checked={settings.autoSync}
+                onCheckedChange={() => handleToggle("autoSync")}
+              />
+            </div>
 
-              {/* 确认提示开关 */}
-              {/* <div className="flex items-center justify-between">
+            {/* 确认提示开关 */}
+            {/* <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium text-foreground">同步前确认提示</div>
                 <div className="text-sm text-muted-foreground">
@@ -339,104 +316,100 @@ const SettingsContainer: React.FC = () => {
                 onCheckedChange={() => handleToggle("showPrompt")}
               />
             </div> */}
-            </CardContent>
-          </Card>
+          </CardContent>
+        </Card>
 
-          {/* 版本信息 */}
-          <Card className="gap-4">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center">
-                <span className="mr-2">📱</span>
-                版本信息
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-foreground">当前版本</span>
-                <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded">
-                  v{getManifestVersion()}
+        {/* 版本信息 */}
+        <Card className="gap-4">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center">
+              <span className="mr-2">📱</span>
+              版本信息
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-foreground">当前版本</span>
+              <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded">
+                v{getManifestVersion()}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm text-foreground">版本状态</span>
+                <span className={`text-sm ${getVersionStatusColor()}`}>
+                  {getVersionStatusText()}
                 </span>
               </div>
+              <Button
+                onClick={handleVersionAction}
+                size="sm"
+                disabled={isCheckingUpdate}
+                variant={updateStatus === "outdated" ? "default" : "outline"}
+              >
+                {getVersionCheckButtonText()}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-foreground">版本状态</span>
-                  <span className={`text-sm ${getVersionStatusColor()}`}>
-                    {getVersionStatusText()}
+        {/* 帮助信息 */}
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="">
+            <div className="flex items-start">
+              <span className="text-primary mr-2">💡</span>
+              <div className="text-sm">
+                <div className="font-medium mb-2 text-foreground">使用提示</div>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>• 启用自动同步后，浏览简历时将自动触发同步</li>
+                  <li>• 如遇问题，请检查是否已登录 tip.mesoor.com</li>
+                  <li>• 定期检查更新以获取最新功能和安全修复</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 更新确认对话框 */}
+      <AlertDialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <span className="mr-2">🔄</span>
+              发现新版本
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>发现新版本可用！</p>
+              <div className="bg-muted p-3 rounded-md space-y-1">
+                <div className="flex justify-between">
+                  <span>当前版本：</span>
+                  <span className="font-mono">
+                    v{updateDialogInfo?.currentVersion}
                   </span>
                 </div>
-                <Button
-                  onClick={handleVersionAction}
-                  size="sm"
-                  disabled={isCheckingUpdate}
-                  variant={updateStatus === "outdated" ? "default" : "outline"}
-                >
-                  {getVersionCheckButtonText()}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 帮助信息 */}
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="">
-              <div className="flex items-start">
-                <span className="text-primary mr-2">💡</span>
-                <div className="text-sm">
-                  <div className="font-medium mb-2 text-foreground">
-                    使用提示
-                  </div>
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>• 启用自动同步后，浏览简历时将自动触发同步</li>
-                    <li>• 建议保持确认提示开启，避免误操作</li>
-                    <li>• 如遇问题，请检查是否已登录 tip.mesoor.com</li>
-                    <li>• 定期检查更新以获取最新功能和安全修复</li>
-                  </ul>
+                <div className="flex justify-between">
+                  <span>最新版本：</span>
+                  <span className="font-mono text-primary">
+                    v{updateDialogInfo?.latestVersion}
+                  </span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* 更新确认对话框 */}
-        <AlertDialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center">
-                <span className="mr-2">🔄</span>
-                发现新版本
-              </AlertDialogTitle>
-              <AlertDialogDescription className="space-y-2">
-                <p>发现新版本可用！</p>
-                <div className="bg-muted p-3 rounded-md space-y-1">
-                  <div className="flex justify-between">
-                    <span>当前版本：</span>
-                    <span className="font-mono">
-                      v{updateDialogInfo?.currentVersion}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>最新版本：</span>
-                    <span className="font-mono text-primary">
-                      v{updateDialogInfo?.latestVersion}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  建议更新到最新版本以获得最佳体验和最新功能。
-                </p>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>稍后再说</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDownloadConfirm}>
-                立即下载
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </>
+              <p className="text-sm text-muted-foreground">
+                建议更新到最新版本以获得最佳体验和最新功能。
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>稍后再说</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDownloadConfirm}>
+              立即下载
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 };
 

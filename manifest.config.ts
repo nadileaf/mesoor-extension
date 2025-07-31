@@ -21,6 +21,7 @@ export default defineManifest({
     "desktopCapture",
     "cookies",
     "storage",
+    "runtime",
   ],
   host_permissions: ["<all_urls>", "*://*.mesoor.com/*"],
   action: {
@@ -32,7 +33,18 @@ export default defineManifest({
   content_scripts: [
     {
       js: ["src/content/main.tsx"],
-      matches: ["https://*/*"],
+      matches: [
+        "*://*.lagou.com/*",
+        "*://*.zhipin.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.linkedin.cn/*",
+        "*://*.liepin.com/*",
+        "*://*.zhaopin.com/*",
+        "*://*.51job.com/*",
+        "*://maimai.cn/*",
+        "*://*.58.com/*",
+        "*://*.shixiseng.com/*",
+      ],
     },
   ],
   background: {

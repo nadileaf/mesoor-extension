@@ -59,35 +59,31 @@ interface IConfirmSynchronizationMessage {
 }
 
 // 组件属性接口
-interface ModernDupeCheckProps {
+interface DupeCheckProps {
   className?: string;
 }
 
-export const ModernDupeCheck: React.FC<ModernDupeCheckProps> = ({
-  className,
-}) => {
+export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
   // 状态管理
   const [state, setState] = useState<ModernDupeCheckState>(() => {
     // 判断是否在支持的网站上激活
-    // const isActive = !(
-    //   location.href.includes("easy.lagou.com") ||
-    //   location.href.includes("hr.shixiseng.com") ||
-    //   location.href.includes("linkedin.com") ||
-    //   location.href.includes("zhipin.com") ||
-    //   (location.href.includes("maimai.cn/ent") &&
-    //     !location.href.includes("maimai.cn/ent/micro_resume")) ||
-    //   (location.href.includes("rd6.zhaopin.com") &&
-    //     !location.href.includes("rd6.zhaopin.com/resume/detail")) ||
-    //   location.href.includes("58.com") ||
-    //   location.href.includes("linkedin.cn") ||
-    //   (location.href.includes("51job.com") &&
-    //     location.href.includes("51job.com/Revision/online/chat")) ||
-    //   location.href.includes("51job.com/Revision/online/talent/search") ||
-    //   location.href.includes("51job.com/Revision/online/talentRecommend") ||
-    //   location.href.includes("duolie.com")
-    // );
-
-    const isActive = true;
+    const isActive = !(
+      location.href.includes("easy.lagou.com") ||
+      location.href.includes("hr.shixiseng.com") ||
+      location.href.includes("linkedin.com") ||
+      location.href.includes("zhipin.com") ||
+      (location.href.includes("maimai.cn/ent") &&
+        !location.href.includes("maimai.cn/ent/micro_resume")) ||
+      (location.href.includes("rd6.zhaopin.com") &&
+        !location.href.includes("rd6.zhaopin.com/resume/detail")) ||
+      location.href.includes("58.com") ||
+      location.href.includes("linkedin.cn") ||
+      (location.href.includes("51job.com") &&
+        location.href.includes("51job.com/Revision/online/chat")) ||
+      location.href.includes("51job.com/Revision/online/talent/search") ||
+      location.href.includes("51job.com/Revision/online/talentRecommend") ||
+      location.href.includes("duolie.com")
+    );
 
     return {
       isActive,
@@ -574,6 +570,7 @@ export const ModernDupeCheck: React.FC<ModernDupeCheckProps> = ({
 
   // 如果组件未激活，不渲染
   if (!state.isActive) {
+    console.log("未激活", state.isActive);
     return null;
   }
 
