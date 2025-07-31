@@ -1,13 +1,18 @@
 import browser, {
-  Browser,
   Cookies,
   Runtime,
-  Tabs,
 } from "webextension-polyfill";
-import { fromEventPattern, Observable, Subscription } from "rxjs";
-import { map, filter, share, tap, delay, withLatestFrom } from "rxjs/operators";
-// 导入可能缺失的类型
-import { ResumeSyncErrorMessageWrapper } from "../utils/request-listen";
+import { fromEventPattern, Observable } from "rxjs";
+import { map, filter, share, tap } from "rxjs/operators";
+
+interface ResumeSyncErrorMessage {
+  status: number
+  data: any
+}
+
+export interface ResumeSyncErrorMessageWrapper {
+  response: ResumeSyncErrorMessage
+}
 
 export interface IMessage<TYPE extends string, P> {
   /**
