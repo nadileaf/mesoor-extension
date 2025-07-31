@@ -50,7 +50,7 @@ browser.runtime.onInstalled.addListener(async (detail) => {
   const storage = await browser.storage.sync.get();
 
   if (!storage.wait) {
-    // 是否同步参数
+    // isSyncWait 为 true 是用户手动同步
     await browser.storage.sync.set({ wait: { isSyncWait: false } });
   }
   console.log("on install setting success...");
@@ -2187,22 +2187,23 @@ mergedResume$
     tap(([data]) => {
       console.log("the last mergedResume data", data);
     }),
-    // mergeMap(([data, token]) => {
-    //     const {details, headers, body} = data;
-    //     const requestId = uuid()
-    //     const syncResumeStartMessage = {
-    //       requestId: requestId,
-    //       type: 'sync-resume-start',
-    //       payload: {
-    //         type: 'other',
-    //       },
-    //     }
-    //     // 返回一个 Observable，确保 mergeMap 有正确的返回值
-    //     return from(browser.tabs.sendMessage(details.tabId, syncResumeStartMessage))
-    //       .pipe(
-    //         map(() => [data, token]) // 保持原始数据流向下一个操作符
-    //       );
-    // }),
+    mergeMap(([data, token]) => {
+      const { details, headers, body } = data;
+      const requestId = uuid();
+      const syncResumeStartMessage = {
+        requestId: requestId,
+        type: "sync-resume-start",
+        payload: {
+          type: "other",
+        },
+      };
+      // 返回一个 Observable，确保 mergeMap 有正确的返回值
+      return from(
+        browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
+      ).pipe(
+        map(() => [data, token]) // 保持原始数据流向下一个操作符
+      );
+    }),
     mergeMap(async ([data, token]) => {
       const requestId = uuid();
       // 等待用户确认

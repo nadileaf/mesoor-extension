@@ -125,7 +125,7 @@ const SettingsContainer: React.FC = () => {
 
         if (result) {
           setSettings({
-            autoSync: result.wait?.isSyncWait || false,
+            autoSync: !result.wait?.isSyncWait || false,
           });
         }
       } catch (error) {
