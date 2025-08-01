@@ -49,8 +49,8 @@ interface IInitialStateResponse {
 }
 
 export type IResumeDownloadMessage = IMessage<"download", { origin: string }>;
-export type IViewResumeMessage = IMessage<
-  "view-resume",
+export type SyncHtmlMessage = IMessage<
+  "sync-html",
   { origin: string; html: string; url: string }
 >;
 export type IViewJobMessage = IMessage<
@@ -309,7 +309,7 @@ export const message$: Observable<{
   onMessage.removeListener.bind(onMessage),
   (message, sender: Runtime.MessageSender) => ({ message, sender })
 ).pipe(
-  tap((msg) => console.log("internal message", msg)),
+  tap((msg) => console.log("message$ send", msg)),
   share()
 );
 

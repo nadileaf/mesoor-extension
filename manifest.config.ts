@@ -20,8 +20,7 @@ export default defineManifest({
     "downloads",
     "desktopCapture",
     "cookies",
-    "storage",
-    "runtime",
+    "storage"
   ],
   host_permissions: ["<all_urls>", "*://*.mesoor.com/*"],
   action: {
@@ -45,6 +44,18 @@ export default defineManifest({
         "*://*.58.com/*",
         "*://*.shixiseng.com/*",
       ],
+    },
+    {
+      "matches": [
+        // 领英个人首页
+        "*://www.linkedin.com/in/*",
+        // 猎聘城猎通非沟通页面
+        "*://h.liepin.com/resume/showresumedetail/*"
+      ],
+      "run_at": "document_end",
+      "js": [
+        "src/content/sync-html.ts"
+      ]
     },
   ],
   background: {

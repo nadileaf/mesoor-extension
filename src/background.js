@@ -26,7 +26,9 @@ import { installDeclarativeNet } from "./utils/with-credentials.ts";
 import { findValueByKey } from "./utils/json-utils.ts";
 import { wait$ } from "./models/preference.ts";
 
-import { isConfirmSynchronizationMessage } from "./utils/message-fileter.ts";
+import { isConfirmSynchronizationMessage,
+  isSyncHtmlMessage
+ } from "./utils/message-fileter.ts";
 
 // 直接定义消息类型常量
 const MessageType = {
@@ -177,7 +179,7 @@ const needCacheHeadersUrl = [
   // 实习僧 搜寻人才无附件
   "*://hr-api-v2.shixiseng.com/api/v1/talent/view*",
   // 无忧job沟通
-  "*://cupid.51job.com/open/im/ehire/chat-detail*",
+  "*://cupid.51job.com/imchat/open/ehire/chat/resumeDetail*",
   // 无忧job非沟通
   "*://ehirej.51job.com/resumedtl/getresume*",
 ];
@@ -186,7 +188,7 @@ const needCacheHeadersUrlSubStream = [
   "*://api-rcn.duolie.com/api/com.liepin.rcnresume.get-resume-detail*",
   "*://hr-api-v2.shixiseng.com/api/v1/resume/action*",
   "*://hr-api-v2.shixiseng.com/api/v1/talent/view*",
-  "*://cupid.51job.com/open/im/ehire/chat-detail*",
+  "*://cupid.51job.com/imchat/open/ehire/chat/resumeDetail*",
   "*://ehirej.51job.com/resumedtl/getresume*",
   "*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail",
 ];
@@ -2176,6 +2178,28 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
   })
 );
 
+const htmlSync$ = message$
+.pipe(
+  filter(isSyncHtmlMessage),
+  withLatestFrom(user$),
+  tap((message) => {
+    console.log('htmlSync$ recieved: ', message)
+  }),
+  mergeMap(async ([message, user]) => {
+    const url = message.message.payload.url
+    const tabId = message.sender.tab.id
+    const details = {
+      url,
+      tabId,
+      html: message.message.payload.html,
+    }
+    const headers = {}
+    const body = {}
+    
+    return {details, headers, body}
+  })
+)
+
 // 简历流聚合
 const mergedResume$ = merge(
   // 领英: 简历流 json含联系方式
@@ -2189,19 +2213,21 @@ const mergedResume$ = merge(
   // 脉脉: 简历流 含附件
   maimaiResumeLast$,
   // 多猎: 实习僧:  无附件
-  resumeSendHeadersV2BaseSub$
+  resumeSendHeadersV2BaseSub$,
+  // html采集
+  htmlSync$
 );
 mergedResume$
   .pipe(
     tap(({details}) => {
       console.log("mergedResume$ details", details);
     }),
-    withLatestFrom(token$, user$), 
-    filter(([_, token, __]) => !!token),
-    tap(([data, token, user]) => {
+    withLatestFrom(user$), 
+    filter(([_, user]) => !!user),
+    tap(([data, user]) => {
       console.log("the last mergedResume data", data);
     }),
-    mergeMap(([data, token, user]) => {
+    mergeMap(([data, user]) => {
         const {details, headers, body} = data;
         const requestId = uuid()
         const syncResumeStartMessage = {
@@ -2214,10 +2240,10 @@ mergedResume$
         // 返回一个 Observable，确保 mergeMap 有正确的返回值
         return from(browser.tabs.sendMessage(details.tabId, syncResumeStartMessage))
           .pipe(
-            map(() => ({ data, token, user })) // 保持原始数据流向下一个操作符
+            map(() => ({ data, user })) // 保持原始数据流向下一个操作符
           );
     }),
-    mergeMap(async ({data, token, user}) => {
+    mergeMap(async ({data, user}) => {
       const requestId = uuid();
       // 等待用户确认
       const confirmed = await waitForSyncMessage(
@@ -2227,10 +2253,10 @@ mergedResume$
         requestId
       );
       // 返回原始数据和确认结果
-      return { data, token, user, confirmed };
+      return { data, user, confirmed };
     }),
     filter(({ confirmed }) => confirmed),
-    mergeMap(async ({ data, token, user }) => {
+    mergeMap(async ({ data, user }) => {
       const { details, headers, body } = data;
       const bodyUrl = details.url;
       const rawBytes = details?.requestBody?.raw?.[0]?.bytes;
@@ -2240,12 +2266,12 @@ mergedResume$
         try {
           _requestBody = JSON.parse(requestBodyText);
         } catch (error) {
-          console.error("处理领英联系方式时出错:", error);
+          console.error("parse json error:", error);
           _requestBody = { raw: requestBodyText };
         }
       }
       const requestBody = {
-        sourceEntityType: "Resume",
+        html: details?.html,
         jsonBody: body?.jsonBody,
         // 坑：领英不是json解不出来
         requestBody: _requestBody,
@@ -2256,7 +2282,7 @@ mergedResume$
       const syncEntityResponse = await request(EntityExecuteHost + "/api/v1/sync-entity/all", {
         method: "POST",
         headers: {
-          Authorization: "Bearer " + token,
+          Authorization: "Bearer " + user.token,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestBody),

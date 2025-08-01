@@ -25,3 +25,9 @@ export function isConfirmSynchronizationMessage(
 ): msg is { message: ISearchMessageFeedback; sender: Runtime.MessageSender } {
   return msg.message.type === "confirm-synchronize";
 }
+
+// 当页面符合配置主动采集HTML，content将这个消息发给bg
+export function isSyncHtmlMessage (msg: any):
+msg is { message: ISearchMessageFeedback, sender: Runtime.MessageSender } {
+  return msg.message.type === 'sync-html'
+}
