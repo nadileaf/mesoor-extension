@@ -20,8 +20,11 @@ export default defineManifest({
     "downloads",
     "desktopCapture",
     "cookies",
-    "storage"
+    "storage",
   ],
+  externally_connectable: {
+    matches: ["*://*.mesoor.com/*", "http://localhost:*/*"],
+  },
   host_permissions: ["<all_urls>", "*://*.mesoor.com/*"],
   action: {
     default_icon: {
@@ -46,16 +49,14 @@ export default defineManifest({
       ],
     },
     {
-      "matches": [
+      matches: [
         // 领英个人首页
         "*://www.linkedin.com/in/*",
         // 猎聘城猎通非沟通页面
-        "*://h.liepin.com/resume/showresumedetail/*"
+        "*://h.liepin.com/resume/showresumedetail/*",
       ],
-      "run_at": "document_end",
-      "js": [
-        "src/content/sync-html.ts"
-      ]
+      run_at: "document_end",
+      js: ["src/content/sync-html.ts"],
     },
   ],
   background: {

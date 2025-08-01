@@ -66,6 +66,31 @@ browser.runtime.onInstalled.addListener(async (detail) => {
 });
 wait$.subscribe((waitState) => (wait = waitState.isSyncWait));
 
+chrome.runtime.onMessageExternal.addListener(function (
+  request,
+  sender,
+  sendResponse
+) {
+  console.log("onMessageExternal", request, sender, sendResponse);
+
+  if (["submitResume", "publishJob"].includes(request.type)) {
+    // 处理插件按钮触发
+    console.log("处理插件按钮触发", request);
+    injectButton2dify(request.url, sender.tab.id, request.config)
+      .then((result) => {
+        sendResponse({ success: true, result });
+      })
+      .catch((error) => {
+        console.error("简历提交失败:", error);
+        sendResponse({ success: false, error: error.message });
+      });
+    // 异步，保持消息通道开放
+    return true;
+  } else {
+    sendResponse({ success: true });
+  }
+});
+
 // 加载网站拦截规则
 let apiConfig = {
   declarativeNetRequestRules: [
@@ -247,8 +272,6 @@ browser.cookies.onChanged.addListener((changeInfo) => {
 });
 
 function connectWebSocket(token) {
-  // TODO 先注释
-  return;
   if (!token) {
     console.error("No token available");
     return null;
@@ -1531,7 +1554,7 @@ browser.webRequest.onBeforeRequest.addListener(
 // 功能: 注入按钮提交到Dify
 async function injectButton2dify(url, tabId, config) {
   try {
-    console.log("注入按钮:", url);
+    console.log("注入按钮:", url, tabId, config);
     const token = await getTokenFromTip();
     if (!token) {
       throw new Error("无法获取认证token");
@@ -1569,7 +1592,7 @@ async function injectButton2dify(url, tabId, config) {
   }
 }
 
-// connectWebSocket();
+connectWebSocket();
 // 前程无忧
 // 人才管理-HTML解析
 // 人才望远镜-HTML解析
