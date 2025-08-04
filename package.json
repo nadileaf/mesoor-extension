@@ -5,11 +5,10 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "dev:develop": "vite --mode development",
+    "dev:production": "vite --mode production",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "dev:localhost": "vite --mode localhost",
-    "dev:develop": "vite --mode develop",
-    "dev:production": "vite --mode production"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.14",

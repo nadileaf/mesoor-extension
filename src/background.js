@@ -1,6 +1,9 @@
 import { v4 as uuid } from "uuid";
 import { jsPDF } from "jspdf";
-import { waitForSyncMessage, waitForResumeSyncResult } from "./utils/syncReceiveResumeUtil.js";
+import {
+  waitForSyncMessage,
+  waitForResumeSyncResult,
+} from "./utils/syncReceiveResumeUtil.js";
 import { BehaviorSubject, EMPTY, merge, from } from "rxjs";
 import browser from "webextension-polyfill";
 import {
@@ -26,41 +29,41 @@ import { installDeclarativeNet } from "./utils/with-credentials.ts";
 import { findValueByKey } from "./utils/json-utils.ts";
 import { wait$ } from "./models/preference.ts";
 
-import { isConfirmSynchronizationMessage,
-  isSyncHtmlMessage
- } from "./utils/message-fileter.ts";
+import {
+  isConfirmSynchronizationMessage,
+  isSyncHtmlMessage,
+} from "./utils/message-fileter.ts";
 
 // 直接定义消息类型常量
 const MessageType = {
   RECEIVE_HTML: "receive_html",
 };
-const WS_SERVER = import.meta.env.WS_SERVER || "ws://web-extension-use.nadileaf.com";
+const WS_SERVER =
+  import.meta.env.VITE_WS_SERVER || "ws://web-extension-use.nadileaf.com";
 
 let difyUserName = "extension-button";
-const BACKGROUND_SERVER_HOST = import.meta.env.BACKGROUND_SERVER_HOST || "https://web-extension-use.nadileaf.com";
-const Token_Host = import.meta.env.TOKEN_HOST || "https://tip-test.nadileaf.com";
-const spaceServer = import.meta.env.SPACE_SERVER || 'https://tip-test.nadileaf.com/api/mesoor-space'
+const BACKGROUND_SERVER_HOST =
+  import.meta.env.VITE_BACKGROUND_SERVER_HOST ||
+  "https://web-extension-use.nadileaf.com";
+const Token_Host =
+  import.meta.env.VITE_TOKEN_HOST || "https://tip-test.nadileaf.com";
+const spaceServer =
+  import.meta.env.VITE_SPACE_SERVER ||
+  "https://tip-test.nadileaf.com/api/mesoor-space";
 const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
 
 // 输出环境变量日志
-console.log('环境变量加载配置:', {
-  WS_SERVER: import.meta.env.WS_SERVER,
-  BACKGROUND_SERVER_HOST: import.meta.env.BACKGROUND_SERVER_HOST,
-  TOKEN_HOST: import.meta.env.TOKEN_HOST,
-  SPACE_SERVER: import.meta.env.SPACE_SERVER,
-  MODE: import.meta.env.MODE, // 当前模式，如'development'或'production'
-  DEV: import.meta.env.DEV,   // 是否为开发模式
-  PROD: import.meta.env.PROD  // 是否为生产模式
-});
-console.log('环境变量生效配置:', {
+console.log("import.meta.env:", import.meta.env);
+console.log("环境变量生效配置:", {
   WS_SERVER,
   BACKGROUND_SERVER_HOST,
   Token_Host,
   spaceServer,
-  EntityExecuteHost
+  EntityExecuteHost,
 });
 // 使用{0}表示entityType，{1}表示openId
-const syncEntityResultCheckUrl = spaceServer + `/v2/entities/{0}/{1}?_proxy=true`
+const syncEntityResultCheckUrl =
+  spaceServer + `/v2/entities/{0}/{1}?_proxy=true`;
 
 let requestsHeaderMap = new Map();
 let ws = null;
@@ -76,8 +79,8 @@ browser.runtime.onInstalled.addListener(async (detail) => {
     // isSyncWait 为 true 是用户手动同步
     await browser.storage.sync.set({ wait: { isSyncWait: false } });
   }
-  const defaultEnv = "tip-test.nadileaf.com"
-  await browser.storage.local.set({ env: defaultEnv, activities: {} })
+  const defaultEnv = "tip-test.nadileaf.com";
+  await browser.storage.local.set({ env: defaultEnv, activities: {} });
   console.log("on install setting success...");
 });
 wait$.subscribe((waitState) => (wait = waitState.isSyncWait));
@@ -2123,7 +2126,7 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
   })
 );
 const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
-  tap(({details}) => {
+  tap(({ details }) => {
     console.log("resumeSendHeadersV2BaseSub$", details);
   }),
   filter(({ details }) => {
@@ -2150,8 +2153,10 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
   }),
-  filter(({details}) => {
-    return details.url.includes("www.linkedin.com/talent/api/talentLinkedInMemberProfiles")
+  filter(({ details }) => {
+    return details.url.includes(
+      "www.linkedin.com/talent/api/talentLinkedInMemberProfiles"
+    );
   }),
   filter(({ details }) => {
     console.log("step 2.3 cacheHeaders details", details);
@@ -2217,27 +2222,26 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
   })
 );
 
-const htmlSync$ = message$
-.pipe(
+const htmlSync$ = message$.pipe(
   filter(isSyncHtmlMessage),
   withLatestFrom(user$),
   tap((message) => {
-    console.log('htmlSync$ recieved: ', message)
+    console.log("htmlSync$ recieved: ", message);
   }),
   mergeMap(async ([message, user]) => {
-    const url = message.message.payload.url
-    const tabId = message.sender.tab.id
+    const url = message.message.payload.url;
+    const tabId = message.sender.tab.id;
     const details = {
       url,
       tabId,
       html: message.message.payload.html,
-    }
-    const headers = {}
-    const body = {}
-    
-    return {details, headers, body}
+    };
+    const headers = {};
+    const body = {};
+
+    return { details, headers, body };
   })
-)
+);
 
 // 简历流聚合
 const mergedResume$ = merge(
@@ -2258,31 +2262,32 @@ const mergedResume$ = merge(
 );
 mergedResume$
   .pipe(
-    tap(({details}) => {
+    tap(({ details }) => {
       console.log("mergedResume$ details", details);
     }),
-    withLatestFrom(user$), 
+    withLatestFrom(user$),
     filter(([_, user]) => !!user),
     tap(([data, user]) => {
       console.log("the last mergedResume data", data);
     }),
     mergeMap(([data, user]) => {
-        const {details, headers, body} = data;
-        const requestId = uuid()
-        const syncResumeStartMessage = {
-          requestId: requestId,
-          type: 'sync-resume-start',
-          payload: {
-            type: 'other',
-          },
-        }
-        // 返回一个 Observable，确保 mergeMap 有正确的返回值
-        return from(browser.tabs.sendMessage(details.tabId, syncResumeStartMessage))
-          .pipe(
-            map(() => ({ data, user })) // 保持原始数据流向下一个操作符
-          );
+      const { details, headers, body } = data;
+      const requestId = uuid();
+      const syncResumeStartMessage = {
+        requestId: requestId,
+        type: "sync-resume-start",
+        payload: {
+          type: "other",
+        },
+      };
+      // 返回一个 Observable，确保 mergeMap 有正确的返回值
+      return from(
+        browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
+      ).pipe(
+        map(() => ({ data, user })) // 保持原始数据流向下一个操作符
+      );
     }),
-    mergeMap(async ({data, user}) => {
+    mergeMap(async ({ data, user }) => {
       const requestId = uuid();
       // 等待用户确认
       const confirmed = await waitForSyncMessage(
@@ -2318,28 +2323,37 @@ mergedResume$
         requestUrl: bodyUrl,
         fileContentB64: body.fileContentB64,
       };
-      const syncEntityResponse = await request(EntityExecuteHost + "/v1/sync-entity/all", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + user.token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      })
+      const syncEntityResponse = await request(
+        EntityExecuteHost + "/v1/sync-entity/all",
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + user.token,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
       const syncResumeFeedbackMsg = {
         requestId: uuid(),
-        type: 'sync-resume-feedback',
+        type: "sync-resume-feedback",
         payload: {
           isSyncResumeError: false,
         },
-      }
+      };
       const syncEntityResponseData = await syncEntityResponse.json();
       const { openId, entityType, tenantId } = syncEntityResponseData.data;
-      await waitForResumeSyncResult(details.tabId, openId, entityType, user, syncEntityResultCheckUrl);
-      syncResumeFeedbackMsg.payload.openId = openId
-      syncResumeFeedbackMsg.payload.tenant = tenantId
-      browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg)
-      return {syncEntityResponse, openId, entityType, tenantId};
+      await waitForResumeSyncResult(
+        details.tabId,
+        openId,
+        entityType,
+        user,
+        syncEntityResultCheckUrl
+      );
+      syncResumeFeedbackMsg.payload.openId = openId;
+      syncResumeFeedbackMsg.payload.tenant = tenantId;
+      browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+      return { syncEntityResponse, openId, entityType, tenantId };
     }),
     share()
   )
