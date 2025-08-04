@@ -23,9 +23,17 @@ export default defineManifest({
     "storage",
   ],
   externally_connectable: {
-    matches: ["*://*.mesoor.com/*", "http://localhost:*/*"],
+    matches: [
+      "*://*.mesoor.com/*",
+      "*://*.nadileaf.com/*",
+      "http://localhost:*/*",
+    ],
   },
-  host_permissions: ["<all_urls>", "*://*.mesoor.com/*"],
+  host_permissions: [
+    "<all_urls>",
+    "*://*.mesoor.com/*",
+    "*://*.nadileaf.com/*",
+  ],
   action: {
     default_icon: {
       48: "public/logo.png",
