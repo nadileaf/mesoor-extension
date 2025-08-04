@@ -6,8 +6,6 @@ window.postMessage(source);
 
 // 监听来自网页的消息
 window.addEventListener("message", (event) => {
-  console.log("mesoor extension event", event);
-
   const { data } = event;
 
   // 仅接受来自本页面的消息，并检查消息类型以确保安全
