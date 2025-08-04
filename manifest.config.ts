@@ -22,13 +22,6 @@ export default defineManifest({
     "cookies",
     "storage",
   ],
-  externally_connectable: {
-    matches: [
-      "*://*.mesoor.com/*",
-      "*://*.nadileaf.com/*",
-      "http://localhost:*/*",
-    ],
-  },
   host_permissions: [
     "<all_urls>",
     "*://*.mesoor.com/*",
@@ -66,6 +59,10 @@ export default defineManifest({
       ],
       run_at: "document_end",
       js: ["src/content/sync-html.ts"],
+    },
+    {
+      matches: ["<all_urls>"],
+      js: ["src/content/tip.ts"],
     },
   ],
   background: {

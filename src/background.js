@@ -1,33 +1,33 @@
-import { v4 as uuid } from "uuid";
 import { jsPDF } from "jspdf";
+import { BehaviorSubject, EMPTY, from, merge } from "rxjs";
 import {
-  waitForSyncMessage,
-  waitForResumeSyncResult,
-} from "./utils/syncReceiveResumeUtil.js";
-import { BehaviorSubject, EMPTY, merge, from } from "rxjs";
-import browser from "webextension-polyfill";
-import {
-  mergeMap,
-  switchMap,
-  share,
+  debounceTime,
+  distinctUntilChanged,
   filter,
   map,
-  distinctUntilChanged,
-  debounceTime,
+  mergeMap,
+  share,
+  switchMap,
   tap,
   withLatestFrom,
 } from "rxjs/operators";
+import { v4 as uuid } from "uuid";
+import browser from "webextension-polyfill";
+import {
+  waitForResumeSyncResult,
+  waitForSyncMessage,
+} from "./utils/syncReceiveResumeUtil.js";
 
 // 导入user流
 import { user$ } from "./models/user.ts";
 // import { env$ } from "./models/user.ts";
+import { wait$ } from "./models/preference.ts";
 import { message$ } from "./models/stream.ts";
+import { delay } from "./utils/index.ts";
+import { findValueByKey } from "./utils/json-utils.ts";
 import * as RequestListen from "./utils/request-listen.ts";
 import { request } from "./utils/request.ts";
-import { delay } from "./utils/index.ts";
 import { installDeclarativeNet } from "./utils/with-credentials.ts";
-import { findValueByKey } from "./utils/json-utils.ts";
-import { wait$ } from "./models/preference.ts";
 
 import {
   isConfirmSynchronizationMessage,
@@ -84,31 +84,6 @@ browser.runtime.onInstalled.addListener(async (detail) => {
   console.log("on install setting success...");
 });
 wait$.subscribe((waitState) => (wait = waitState.isSyncWait));
-
-chrome.runtime.onMessageExternal.addListener(function (
-  request,
-  sender,
-  sendResponse
-) {
-  console.log("onMessageExternal", request, sender, sendResponse);
-
-  if (["submitResume", "publishJob"].includes(request.type)) {
-    // 处理插件按钮触发
-    console.log("处理插件按钮触发", request);
-    injectButton2dify(request.url, sender.tab.id, request.config)
-      .then((result) => {
-        sendResponse({ success: true, result });
-      })
-      .catch((error) => {
-        console.error("简历提交失败:", error);
-        sendResponse({ success: false, error: error.message });
-      });
-    // 异步，保持消息通道开放
-    return true;
-  } else {
-    sendResponse({ success: true });
-  }
-});
 
 // 加载网站拦截规则
 let apiConfig = {
@@ -1238,6 +1213,10 @@ async function handleScreenShot(message) {
 
 // 处理来自content script或popup的消息
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === "pingMesoorExtension") {
+    sendResponse({ message: "pingMesoorExtensionSuccess" });
+  }
+
   if (
     request.type === "sendWebSocketMessage" &&
     ws &&
