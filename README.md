@@ -21,7 +21,14 @@ npm install
 2. Start development server:
 
 ```bash
-npm run dev
+# 本地环境热重载
+pnpm dev:localhost
+
+# 开发环境热重载
+pnpm dev:develop
+
+# 生产环境热重载
+pnpm dev:production
 ```
 
 3. Open Chrome and navigate to `chrome://extensions/`, enable "Developer mode", and load the unpacked extension from the `dist` directory.

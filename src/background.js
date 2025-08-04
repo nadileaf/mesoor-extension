@@ -34,15 +34,31 @@ import { isConfirmSynchronizationMessage,
 const MessageType = {
   RECEIVE_HTML: "receive_html",
 };
-const WS_SERVER = "ws://web-extension-use.mesoor.com";
+const WS_SERVER = import.meta.env.WS_SERVER || "ws://web-extension-use.nadileaf.com";
 
 let difyUserName = "extension-button";
-const BACKGROUND_SERVER_HOST = "localhost:8080";
-// const WS_SERVER = `ws://${BACKGROUND_SERVER_HOST}`;
-const Token_Host = "https://tip.mesoor.com";
-const EntityExecuteHost = `http://${BACKGROUND_SERVER_HOST}`;
-const spaceServer = 'https://tip-test.nadileaf.com/api/mesoor-space'
-// https://tip-test.nadileaf.com/api/mesoor-space/v2/entities/Resume/mesoorExtension-ehire.51job.com-859395356
+const BACKGROUND_SERVER_HOST = import.meta.env.BACKGROUND_SERVER_HOST || "https://web-extension-use.nadileaf.com";
+const Token_Host = import.meta.env.TOKEN_HOST || "https://tip-test.nadileaf.com";
+const spaceServer = import.meta.env.SPACE_SERVER || 'https://tip-test.nadileaf.com/api/mesoor-space'
+const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
+
+// 输出环境变量日志
+console.log('环境变量加载配置:', {
+  WS_SERVER: import.meta.env.WS_SERVER,
+  BACKGROUND_SERVER_HOST: import.meta.env.BACKGROUND_SERVER_HOST,
+  TOKEN_HOST: import.meta.env.TOKEN_HOST,
+  SPACE_SERVER: import.meta.env.SPACE_SERVER,
+  MODE: import.meta.env.MODE, // 当前模式，如'development'或'production'
+  DEV: import.meta.env.DEV,   // 是否为开发模式
+  PROD: import.meta.env.PROD  // 是否为生产模式
+});
+console.log('环境变量生效配置:', {
+  WS_SERVER,
+  BACKGROUND_SERVER_HOST,
+  Token_Host,
+  spaceServer,
+  EntityExecuteHost
+});
 // 使用{0}表示entityType，{1}表示openId
 const syncEntityResultCheckUrl = spaceServer + `/v2/entities/{0}/{1}?_proxy=true`
 
@@ -1946,7 +1962,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   }),
   mergeMap(async (details) => {
     // 必须的延迟，否则会出错
-    await delay(4000);
+    await delay(2000);
     const originalHeaders =
       requestsHeaderMap.get(details.requestId)?.headers ?? {};
     if (!originalHeaders) {
@@ -2302,7 +2318,7 @@ mergedResume$
         requestUrl: bodyUrl,
         fileContentB64: body.fileContentB64,
       };
-      const syncEntityResponse = await request(EntityExecuteHost + "/api/v1/sync-entity/all", {
+      const syncEntityResponse = await request(EntityExecuteHost + "/v1/sync-entity/all", {
         method: "POST",
         headers: {
           Authorization: "Bearer " + user.token,
