@@ -51,6 +51,21 @@ export default defineManifest({
       ],
     },
     {
+      js: ["src/content/broswer-use.js"],
+      matches: [
+        "*://*.lagou.com/*",
+        "*://*.zhipin.com/*",
+        "*://*.linkedin.com/*",
+        "*://*.linkedin.cn/*",
+        "*://h.liepin.com/*",
+        "*://*.zhaopin.com/*",
+        "*://*.51job.com/*",
+        "*://maimai.cn/*",
+        "*://*.58.com/*",
+        "*://*.shixiseng.com/*",
+      ],
+    },
+    {
       matches: [
         // 领英个人首页
         "*://www.linkedin.com/in/*",
