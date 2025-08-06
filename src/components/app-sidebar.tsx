@@ -11,7 +11,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { Bot, Settings } from 'lucide-react';
-import React from 'react';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { TabType } from '../sidebar/App';
 
 interface AppSidebarProps {

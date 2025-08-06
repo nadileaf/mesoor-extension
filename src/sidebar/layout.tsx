@@ -16,16 +16,17 @@ export default function Layout({
   onTabChange,
 }: LayoutProps) {
   return (
-    // <ThemeProvider>
-    <SidebarProvider defaultOpen={true}>
-      <main className="flex-1 h-screen overflow-hidden scrollbar-hide">
-        <div className="h-full w-full relative">
-          <SidebarTrigger className="absolute top-2 right-2 z-10" />
-          {children}
-        </div>
-      </main>
-      <AppSidebar activeTab={activeTab} onTabChange={onTabChange} />
-    </SidebarProvider>
-    // </ThemeProvider>
+    <ThemeProvider>
+      <SidebarProvider defaultOpen={true}>
+        <main className="flex-1 h-screen overflow-hidden scrollbar-hide">
+          <div className="h-full w-full relative">
+            {/* 被 dify 遮挡了 */}
+            {/* <SidebarTrigger className="absolute top-2 right-2 z-10" /> */}
+            {children}
+          </div>
+        </main>
+        <AppSidebar activeTab={activeTab} onTabChange={onTabChange} />
+      </SidebarProvider>
+    </ThemeProvider>
   );
 }
