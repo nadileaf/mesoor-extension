@@ -24,16 +24,17 @@ interface RequestResponse {
   text(): Promise<string>;
   json(): Promise<any>;
   blob(): Promise<Blob>;
+  status: number;
 }
 
 // tslint:disable-next-line:max-line-length
 export const request = async (
   url: string,
   opt?: RequestInit | undefined,
-  params?: object | undefined
+  params?: { [key: string]: string } | undefined
 ): Promise<RequestResponse> => {
   if (!!params) {
-    const query = {};
+    const query: Record<string, string> = {};
     Object.keys(params).forEach(
       (key: string) => (query[key] = encodeURIComponent(params[key]))
     );
@@ -57,6 +58,7 @@ export const request = async (
     json: async () => await response.json(),
     blob: async () => await response.blob(),
     headers: response.headers,
+    status: response.status,
     request: {
       responseURL: response.url,
     },

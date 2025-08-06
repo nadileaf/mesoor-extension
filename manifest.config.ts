@@ -48,6 +48,7 @@ export default defineManifest({
         '*://maimai.cn/*',
         '*://*.58.com/*',
         '*://*.shixiseng.com/*',
+        '*://*.duolie.com/*',
       ],
     },
     {
@@ -67,10 +68,12 @@ export default defineManifest({
     },
     {
       matches: [
-        // 领英个人首页
+        // 领英个人主页
         '*://www.linkedin.com/in/*',
         // 猎聘城猎通非沟通页面
         '*://h.liepin.com/resume/showresumedetail/*',
+        // 脉脉个人主页
+        '*://maimai.cn/profile/detail*',
       ],
       run_at: 'document_end',
       js: ['src/content/sync-html.ts'],

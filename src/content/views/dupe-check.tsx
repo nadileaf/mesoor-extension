@@ -72,16 +72,15 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       location.href.includes('hr.shixiseng.com') ||
       location.href.includes('linkedin.com') ||
       location.href.includes('zhipin.com') ||
-      (location.href.includes('maimai.cn/ent') &&
-        !location.href.includes('maimai.cn/ent//v41/recruit/talents')) ||
+      location.href.includes('maimai.cn') ||
       (location.href.includes('rd6.zhaopin.com') &&
         !location.href.includes('rd6.zhaopin.com/resume/detail')) ||
       location.href.includes('58.com') ||
       location.href.includes('linkedin.cn') ||
-      (location.href.includes('51job.com') &&
-        location.href.includes('51job.com/Revision/online/chat')) ||
-      location.href.includes('51job.com/Revision/online/talent/search') ||
-      location.href.includes('51job.com/Revision/online/talentRecommend') ||
+      location.href.includes('51job.com') ||
+      //   location.href.includes("51job.com/Revision/online/chat")) ||
+      // location.href.includes("51job.com/Revision/online/talent/search") ||
+      // location.href.includes("51job.com/Revision/online/talentRecommend") ||
       location.href.includes('duolie.com') ||
       // 猎聘诚猎通沟通列表页面
       (location.href.includes('h.liepin.com') &&

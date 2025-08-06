@@ -1725,9 +1725,14 @@ const maimaiResumeLast$ = maimaiResume$.pipe(
     await delay(1500);
     const resp = await request(details.url);
     let fileContentB64 = null;
+    let fileRespHeaders = null;
     const data = await resp.json();
     if (data?.data?.resume?.file_url) {
       const fileResp = await request(data.data.resume.file_url);
+      fileRespHeaders = {};
+      fileResp.headers.forEach((value, key) => {
+        fileRespHeaders[key] = value;
+      });
       const blob = await fileResp.blob();
       fileContentB64 = await new Promise(resolve => {
         const reader = new FileReader();
@@ -1749,7 +1754,7 @@ const maimaiResumeLast$ = maimaiResume$.pipe(
             {
               fileContentB64: fileContentB64,
               type: 'resumeAttachment',
-              responseHeaders: fileResp.headers,
+              responseHeaders: fileRespHeaders,
             },
           ]
         : null,
@@ -2280,39 +2285,6 @@ mergedResume$
     }),
     filter(({ confirmed }) => confirmed),
     mergeMap(async ({ data, user }) => {
-      const { details, headers, body } = data;
-      const bodyUrl = details.url;
-      const rawBytes = details?.requestBody?.raw?.[0]?.bytes;
-      let _requestBody = null;
-      if (rawBytes) {
-        const requestBodyText = new TextDecoder().decode(rawBytes);
-        try {
-          _requestBody = JSON.parse(requestBodyText);
-        } catch (error) {
-          console.error('parse json error:', error);
-          _requestBody = { raw: requestBodyText };
-        }
-      }
-      const requestBody = {
-        html: details?.html,
-        jsonBody: body?.jsonBody,
-        // 坑：领英不是json解不出来
-        requestBody: _requestBody,
-        requestHeaders: headers,
-        requestUrl: bodyUrl,
-        fileContentB64: body.fileContentB64,
-      };
-      const syncEntityResponse = await request(
-        EntityExecuteHost + '/v1/sync-entity/all',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + user.token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
       const syncResumeFeedbackMsg = {
         requestId: uuid(),
         type: 'sync-resume-feedback',
@@ -2320,19 +2292,75 @@ mergedResume$
           isSyncResumeError: false,
         },
       };
-      const syncEntityResponseData = await syncEntityResponse.json();
-      const { openId, entityType, tenantId } = syncEntityResponseData.data;
-      await waitForResumeSyncResult(
-        details.tabId,
-        openId,
-        entityType,
-        user,
-        syncEntityResultCheckUrl
-      );
-      syncResumeFeedbackMsg.payload.openId = openId;
-      syncResumeFeedbackMsg.payload.tenant = tenantId;
-      browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
-      return { syncEntityResponse, openId, entityType, tenantId };
+      const { details, headers, body } = data;
+      try {
+        const bodyUrl = details.url;
+        const rawBytes = details?.requestBody?.raw?.[0]?.bytes;
+        let _requestBody = null;
+        if (rawBytes) {
+          const requestBodyText = new TextDecoder().decode(rawBytes);
+          try {
+            _requestBody = JSON.parse(requestBodyText);
+          } catch (error) {
+            console.error('parse json error:', error);
+            _requestBody = { raw: requestBodyText };
+          }
+        }
+        console.log('合并流中的body数据:', body);
+        const requestBody = {
+          html: details?.html,
+          jsonBody: body?.jsonBody,
+          // 坑：领英不是json解不出来
+          requestBody: _requestBody,
+          requestHeaders: headers,
+          requestUrl: bodyUrl,
+          fileContentB64: body.fileContentB64,
+        };
+        console.log('发送到服务器的requestBody:', requestBody);
+        const syncEntityResponse = await request(
+          EntityExecuteHost + '/v1/sync-entity/all',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + user.token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          }
+        );
+
+        console.log('syncEntityResponse', syncEntityResponse.status !== 200);
+        console.log('syncEntityResponse22', syncEntityResponse.status);
+        if (syncEntityResponse.status !== 200) {
+          syncResumeFeedbackMsg.payload.isSyncResumeError = true;
+          browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+          return;
+        }
+        const syncEntityResponseData = await syncEntityResponse.json();
+        const { openId, entityType, tenantId } = syncEntityResponseData.data;
+        await waitForResumeSyncResult(
+          details.tabId,
+          openId,
+          entityType,
+          user,
+          syncEntityResultCheckUrl
+        );
+        syncResumeFeedbackMsg.payload.openId = openId;
+        syncResumeFeedbackMsg.payload.tenant = tenantId;
+        browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+        return { syncEntityResponse, openId, entityType, tenantId };
+      } catch (error) {
+        if (error.response) {
+          syncResumeFeedbackMsg.payload.errorCode = error.response.status;
+          syncResumeFeedbackMsg.payload.errorMessage = JSON.stringify(
+            error.response.data
+          );
+        }
+        console.error('简历同步过程中出错:', error);
+        syncResumeFeedbackMsg.payload.isSyncResumeError = true;
+      } finally {
+        browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+      }
     }),
     share()
   )
