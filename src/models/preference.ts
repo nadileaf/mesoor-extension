@@ -1,17 +1,17 @@
-import { from, concat, of } from "rxjs";
-import { filter, map, shareReplay, catchError } from "rxjs/operators";
+import { from, concat, of } from 'rxjs';
+import { filter, map, shareReplay, catchError } from 'rxjs/operators';
 import {
   syncstorageChange$,
   localstorageChange$,
   safeStorageGet,
-} from "../models/storage";
+} from '../models/storage';
 
 // preferences$
-export const fromStorage$ = from(safeStorageGet("sync", "preferences")).pipe(
-  filter((storage) => !!storage.preferences),
-  map((storage) => storage.preferences!),
-  catchError((error) => {
-    console.error("Error getting preferences from storage:", error);
+export const fromStorage$ = from(safeStorageGet('sync', 'preferences')).pipe(
+  filter(storage => !!storage.preferences),
+  map(storage => storage.preferences!),
+  catchError(error => {
+    console.error('Error getting preferences from storage:', error);
     return of(null);
   }),
   filter(Boolean)
@@ -29,11 +29,11 @@ export const preferences$ = concat(fromStorage$, preferencesChange$).pipe(
 );
 
 // env$
-export const fromLocalStorage$ = from(safeStorageGet("local", "env")).pipe(
-  filter((storage) => !!storage.env),
-  map((storage) => storage.env!),
-  catchError((error) => {
-    console.error("Error getting env from storage:", error);
+export const fromLocalStorage$ = from(safeStorageGet('local', 'env')).pipe(
+  filter(storage => !!storage.env),
+  map(storage => storage.env!),
+  catchError(error => {
+    console.error('Error getting env from storage:', error);
     return of(null);
   }),
   filter(Boolean)
@@ -49,11 +49,11 @@ const envChange$ = localstorageChange$.pipe(
 export const env$ = concat(fromLocalStorage$, envChange$).pipe(shareReplay(1));
 
 // wait$
-const waitStateFromLocalStorage$ = from(safeStorageGet("sync", "wait")).pipe(
-  filter((storage) => !!storage.wait),
-  map((storage) => storage.wait!),
-  catchError((error) => {
-    console.error("Error getting wait state from storage:", error);
+const waitStateFromLocalStorage$ = from(safeStorageGet('sync', 'wait')).pipe(
+  filter(storage => !!storage.wait),
+  map(storage => storage.wait!),
+  catchError(error => {
+    console.error('Error getting wait state from storage:', error);
     return of(null);
   }),
   filter(Boolean)
@@ -69,12 +69,12 @@ export const wait$ = concat(waitStateFromLocalStorage$, waitStateChange$).pipe(
 );
 
 const loginStateFromLocalStorage$ = from(
-  safeStorageGet("local", "loginState")
+  safeStorageGet('local', 'loginState')
 ).pipe(
-  filter((storage) => !!storage.loginState),
-  map((storage) => storage.loginState),
-  catchError((error) => {
-    console.error("Error getting loginState from storage:", error);
+  filter(storage => !!storage.loginState),
+  map(storage => storage.loginState),
+  catchError(error => {
+    console.error('Error getting loginState from storage:', error);
     return of(null);
   }),
   filter(Boolean)
@@ -91,12 +91,12 @@ export const loginState$ = concat(
 ).pipe(shareReplay(1));
 
 export const fromLocalStorageSync$ = from(
-  safeStorageGet("sync", "syncparams")
+  safeStorageGet('sync', 'syncparams')
 ).pipe(
-  filter((sync) => !!sync.syncparams),
-  map((sync) => sync.syncparams!),
-  catchError((error) => {
-    console.error("Error getting syncparams from storage:", error);
+  filter(sync => !!sync.syncparams),
+  map(sync => sync.syncparams!),
+  catchError(error => {
+    console.error('Error getting syncparams from storage:', error);
     return of(null);
   }),
   filter(Boolean)
@@ -107,21 +107,21 @@ export const SyncChange$ = syncstorageChange$.pipe(
   map(([change]) => change.syncparams!.newValue!)
 );
 
-const sid$ = from(safeStorageGet("local", "socketidzyh")).pipe(
-  filter((socketid) => !!socketid.socketidzyh),
-  map((socketid) => socketid.socketidzyh!),
-  catchError((error) => {
-    console.error("Error getting socketidzyh from storage:", error);
+const sid$ = from(safeStorageGet('local', 'socketidzyh')).pipe(
+  filter(socketid => !!socketid.socketidzyh),
+  map(socketid => socketid.socketidzyh!),
+  catchError(error => {
+    console.error('Error getting socketidzyh from storage:', error);
     return of(null);
   }),
   filter(Boolean)
 );
 
-const activitiesLocal$ = from(safeStorageGet("local", "activities")).pipe(
-  filter((storage) => !!storage.activities),
-  map((storage) => storage.activities!),
-  catchError((error) => {
-    console.error("Error getting activities from storage:", error);
+const activitiesLocal$ = from(safeStorageGet('local', 'activities')).pipe(
+  filter(storage => !!storage.activities),
+  map(storage => storage.activities!),
+  catchError(error => {
+    console.error('Error getting activities from storage:', error);
     return of(null);
   }),
   filter(Boolean)
@@ -155,12 +155,12 @@ export const sidChange$ = concat(
   sidChangeFromLocalStorage$
 ).pipe(shareReplay(1));
 export const storageSyncConfig$ = from(
-  safeStorageGet("sync", "syncConfig")
+  safeStorageGet('sync', 'syncConfig')
 ).pipe(
-  filter((storage) => !!storage.syncConfig),
-  map((storage) => storage.syncConfig!),
-  catchError((error) => {
-    console.error("Error getting syncConfig from storage:", error);
+  filter(storage => !!storage.syncConfig),
+  map(storage => storage.syncConfig!),
+  catchError(error => {
+    console.error('Error getting syncConfig from storage:', error);
     return of(null);
   }),
   filter(Boolean)

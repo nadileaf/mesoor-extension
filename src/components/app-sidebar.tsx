@@ -9,10 +9,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar";
-import { Bot, Settings } from "lucide-react";
-import React from "react";
-import { TabType } from "../sidebar/App";
+} from '@/components/ui/sidebar';
+import { Bot, Settings } from 'lucide-react';
+import React from 'react';
+import { TabType } from '../sidebar/App';
 
 interface AppSidebarProps {
   activeTab?: TabType;
@@ -22,14 +22,14 @@ interface AppSidebarProps {
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const navItems = [
     {
-      id: "Sourcing" as TabType,
+      id: 'Sourcing' as TabType,
       icon: Bot,
-      label: "AI Sourcing",
+      label: 'AI Sourcing',
     },
     {
-      id: "settings" as TabType,
+      id: 'settings' as TabType,
       icon: Settings,
-      label: "设置",
+      label: '设置',
     },
   ];
 
@@ -45,25 +45,25 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           <SidebarGroupLabel className=" font-medium">应用</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {navItems.map(item => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
                     isActive={activeTab === item.id}
                     onClick={() => onTabChange?.(item.id)}
                     className={`w-full transition-all duration-200 ${
                       activeTab === item.id
-                        ? "bg-primary/10 text-primary hover:bg-primary/30"
-                        : "hover:bg-sidebar-accent"
+                        ? 'bg-primary/10 text-primary hover:bg-primary/30'
+                        : 'hover:bg-sidebar-accent'
                     }`}
                   >
                     <item.icon
                       className={`w-5 h-5 transition-colors ${
-                        activeTab === item.id ? "text-primary" : ""
+                        activeTab === item.id ? 'text-primary' : ''
                       }`}
                     />
                     <span
                       className={`font-medium ${
-                        activeTab === item.id ? "text-primary" : ""
+                        activeTab === item.id ? 'text-primary' : ''
                       }`}
                     >
                       {item.label}

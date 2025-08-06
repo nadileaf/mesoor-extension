@@ -1,17 +1,17 @@
-import path from "node:path";
-import { crx } from "@crxjs/vite-plugin";
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import zip from "vite-plugin-zip-pack";
-import manifest from "./manifest.config.ts";
-import { name, version } from "./package.json";
-import tailwindcss from "@tailwindcss/vite";
+import path from 'node:path';
+import { crx } from '@crxjs/vite-plugin';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+import zip from 'vite-plugin-zip-pack';
+import manifest from './manifest.config.ts';
+import { name, version } from './package.json';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
   return {
     resolve: {
       alias: {
-        "@": `${path.resolve(__dirname, "src")}`,
+        '@': `${path.resolve(__dirname, 'src')}`,
       },
     },
     plugins: [
@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       crx({ manifest }),
       zip({
-        outDir: "release",
+        outDir: 'release',
         outFileName: `crx-${name}-${version}-${mode}.zip`,
       }),
     ],

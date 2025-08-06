@@ -1,7 +1,6 @@
-import browser, { Cookies, Runtime, WebRequest } from "webextension-polyfill";
-import { fromEventPattern, Observable, Subscription } from "rxjs";
-import { map, filter, share, tap, delay, withLatestFrom } from "rxjs/operators";
-import { isNil } from "lodash-es";
+import { fromEventPattern, Observable, Subscription } from 'rxjs';
+import { filter, map, share, tap } from 'rxjs/operators';
+import browser, { Cookies, Runtime, WebRequest } from 'webextension-polyfill';
 
 export interface IFetchRequest {
   /**
@@ -98,7 +97,7 @@ export interface IPositionPrefillItem {
   deptId?: string;
   // 职位名称
   hjobTitle: string;
-  ["hjobJobTitle[0]"]?: string;
+  ['hjobJobTitle[0]']?: string;
   // 地区对应的code(部分平台是名称),单个传dq,有些平台只能选择一个地区
   // 各平台此参数传入的都不一样，猎聘:int类型id,前程无忧:string类型,例:'[["北京","东城区"], ["上海"]]',智联:没传这个
   dq?: string;
@@ -129,18 +128,18 @@ export interface IPositionPrefillItem {
   // 正常language要求传这个参数，猎聘的是特殊的,不同网站传的不同
   // 前程:'[{'lang51': '其它', 'langOrigin': '母语'}]'(需要JSON.parse)
   languageRequire?: string;
-  ["canSourceIndustry[0]"]?: string;
-  ["canSourceIndustry[1]"]?: string;
-  ["canSourceIndustry[2]"]?: string;
-  ["canSourceIndustry[3]"]?: string;
-  ["canSourceIndustry[4]"]?: string;
+  ['canSourceIndustry[0]']?: string;
+  ['canSourceIndustry[1]']?: string;
+  ['canSourceIndustry[2]']?: string;
+  ['canSourceIndustry[3]']?: string;
+  ['canSourceIndustry[4]']?: string;
   // 职位描述
   detailDuty: string;
-  ["skillTags[0]"]?: string;
-  ["skillTags[1]"]?: string;
-  ["skillTags[2]"]?: string;
-  ["skillTags[3]"]?: string;
-  ["skillTags[4]"]?: string;
+  ['skillTags[0]']?: string;
+  ['skillTags[1]']?: string;
+  ['skillTags[2]']?: string;
+  ['skillTags[3]']?: string;
+  ['skillTags[4]']?: string;
   memo?: string;
   jobEmergencyLevelCode?: string;
   recruitReason?: string;
@@ -241,50 +240,52 @@ interface IEvalablePayload {
   code: string;
 }
 
-interface IInitialStateRequest {}
+interface IInitialStateRequest {
+  // Currently empty, will be extended as needed
+}
 
 interface IInitialStateResponse {
   [url: string]: number;
 }
 
-export type IResumeDownloadMessage = IMessage<"download", { origin: string }>;
+export type IResumeDownloadMessage = IMessage<'download', { origin: string }>;
 export type IViewResumeMessage = IMessage<
-  "view-resume",
+  'view-resume',
   { origin: string; html: string; url: string }
 >;
 export type IViewJobMessage = IMessage<
-  "view-job",
+  'view-job',
   { origin: string; html: string; url: string; channel: string }
 >;
-export type IHistoryUpdate = IMessage<"history-update", { url: string }>;
-export type IFetchRequestMessage = IMessage<"fetch", IFetchRequest>;
-export type IFetchResponseMessage = IMessage<"fetch", IFetchResponse>;
-export type IEvalableMessage = IMessage<"eval", IEvalablePayload>;
-export type IEvalableReturnMessage = IMessage<"eval", Object>;
+export type IHistoryUpdate = IMessage<'history-update', { url: string }>;
+export type IFetchRequestMessage = IMessage<'fetch', IFetchRequest>;
+export type IFetchResponseMessage = IMessage<'fetch', IFetchResponse>;
+export type IEvalableMessage = IMessage<'eval', IEvalablePayload>;
+export type IEvalableReturnMessage = IMessage<'eval', object>;
 export type ILoginMessage = IMessage<
-  "login",
+  'login',
   { origin: string; timestamp: number; url: string }
 >;
 export type IInitialStateRequestMessage = IMessage<
-  "initLogin",
+  'initLogin',
   IInitialStateRequest
 >;
 export type IInitialStateResponseMessage = IMessage<
-  "initLogin",
+  'initLogin',
   IInitialStateResponse
 >;
-export type ISearchPrefillMessage = IMessage<"search-prefill", ISearchPrefill>;
+export type ISearchPrefillMessage = IMessage<'search-prefill', ISearchPrefill>;
 export type IPositionPrefillMessage = IMessage<
-  "position-prefill",
+  'position-prefill',
   IPositionPrefill
 >;
-export type ISearchResumeMessage = IMessage<"search-resume", ISearchResume>;
+export type ISearchResumeMessage = IMessage<'search-resume', ISearchResume>;
 export type msgPostPosition = IMessage<
-  "post_position",
+  'post_position',
   { originData: string; origin: string; responseText?: string }
 >;
 export type IViewResumeEmailMessage = IMessage<
-  "view-resume-send-mail",
+  'view-resume-send-mail',
   {
     url: string;
     company: string;
@@ -296,19 +297,19 @@ export type IViewResumeEmailMessage = IMessage<
 >;
 
 export type CheckJobDesMessage = IMessage<
-  "check-job-des",
+  'check-job-des',
   { language: string; location: string; jobdesc: string }
 >;
 // dashboardMessager收到dashboard用postMessage发来用户手动搜索的消息
 // 然后发送ISearchMessage类型的消息给background
 export type ISearchMessage = IMessage<
-  "search",
+  'search',
   { searchWord: string; url: string }
 >;
 
 // background收到ISearchMessage之后发送ISearchMessageWithDashboardTabId给内容脚本search的message
 export type ISearchMessageWithDashboardTabId = IMessage<
-  "search-with-dashboard-tab-id",
+  'search-with-dashboard-tab-id',
   {
     searchWord: string;
     url: string;
@@ -318,7 +319,7 @@ export type ISearchMessageWithDashboardTabId = IMessage<
 
 // search内容脚本返回给background的反馈消息以及background根据dashbaordTabId给dashboardMessager发送的消息
 export type ISearchMessageFeedback = IMessage<
-  "search-feedback",
+  'search-feedback',
   {
     isSuccess: boolean;
     dashboardTabId: number; // dashboardTabId似乎可以通过tabs.query找到，之后也许可以把这个字段删掉
@@ -327,23 +328,23 @@ export type ISearchMessageFeedback = IMessage<
 >;
 
 export type IReceiveZhaopinHTMLMessage = IMessage<
-  "receive_zhaopin_html",
-  Object
+  'receive_zhaopin_html',
+  object
 >;
 export type InterviewWuyouChatMessage = IMessage<
-  "interview_wuyou_chat_message",
-  Object
+  'interview_wuyou_chat_message',
+  object
 >;
 // 领英上同步简历时，background 向 syncReceiveResumeLinkedin 上发这种消息，用来获取页面的 html
 export type IReceiveLinkedinHTMLMessage = IMessage<
-  "receive_linkedin_html",
-  Object
+  'receive_linkedin_html',
+  object
 >;
-export type IReceiveLiepinHTMLMessage = IMessage<"receive_liepin_html", Object>;
+export type IReceiveLiepinHTMLMessage = IMessage<'receive_liepin_html', object>;
 
 // dupeCheck发送给background开始查重的message
 export type IDupeCheckTriggerMessage = IMessage<
-  "dupe-check-trigger",
+  'dupe-check-trigger',
   {
     openId: string;
     tenant: string;
@@ -352,7 +353,7 @@ export type IDupeCheckTriggerMessage = IMessage<
 
 // background返回给dupeCheck查重结果的message
 export type IDupeCheckFeedbackMessage = IMessage<
-  "dupe-check-feedback",
+  'dupe-check-feedback',
   {
     isDupeCheckError: boolean; // 简历查重出错
     dupeCheckResult?: boolean; // 简历查重返回的重复简历的openId
@@ -376,25 +377,25 @@ export interface ISyncResumeBaseConfig {
 
 // 通知dupeCheck开始手抓简历 -> dupeCheck按钮UI应该发生变化，现在一般用在lagou监听到json请求时
 export type ISyncResumeStartMessage = IMessage<
-  "sync-resume-start",
+  'sync-resume-start',
   {
     // tslint:disable-next-line:max-line-length
     type:
-      | "lagou"
-      | "other"
-      | "shixiseng"
-      | "bosszpRecommand"
-      | "maimai"
-      | "bosszpSearch"
-      | "zhaopinRecommend"
-      | "bossChat";
+      | 'lagou'
+      | 'other'
+      | 'shixiseng'
+      | 'bosszpRecommand'
+      | 'maimai'
+      | 'bosszpSearch'
+      | 'zhaopinRecommend'
+      | 'bossChat';
     baseConfig?: ISyncResumeBaseConfig;
   }
 >;
 
 // 手抓完成之后，给dupeCheck发送反馈 -> dupeCheck UI发生变化
 export type ISyncResumeFeedbackMessage = IMessage<
-  "sync-resume-feedback",
+  'sync-resume-feedback',
   {
     isSyncResumeError: boolean; // 手抓简历出错
     errorCode?: number; // 报错的错误码
@@ -406,7 +407,7 @@ export type ISyncResumeFeedbackMessage = IMessage<
 
 // 2022-04-18 职位刷新用接口
 export type IRefreshJobMessage = IMessage<
-  "refreshJob",
+  'refreshJob',
   {
     origin: string;
     account: string;
@@ -430,7 +431,7 @@ interface IRefreshResponse {
 }
 
 export type IRefreshJobFeedBack = IMessage<
-  "refreshJob-feedback",
+  'refreshJob-feedback',
   {
     site: ISite;
     loading: boolean;
@@ -451,7 +452,7 @@ export interface IPrefillMessage {
 }
 
 export type IPrefillFeedBackMessage = IMessage<
-  "prefill-feedback",
+  'prefill-feedback',
   {
     isError: boolean;
     feedbackMessage: string;
@@ -461,7 +462,7 @@ export type IPrefillFeedBackMessage = IMessage<
 interface PrefillConfig {
   displayName: string;
   value: string | string[];
-  displayType: "input" | "arrayText" | "textarea";
+  displayType: 'input' | 'arrayText' | 'textarea';
   initialData: any;
 }
 
@@ -508,12 +509,12 @@ export interface ExtraConfig {
 // }
 
 // liepin 特殊用户在调用 https://h.liepin.com/resumeview/getresumedetailcoreview.json 请求之后 -> 调用 sync-receive-resume
-export type ILiepinContactImgMessage = IMessage<"liepin-contact-img", {}>;
+export type ILiepinContactImgMessage = IMessage<'liepin-contact-img', object>;
 
 // Linkedin页面变化通知给dupeCheck -> dupeCheck根据type的信息来决定UI变化，如果是resume那就显示按钮，如果是other就隐藏按钮
 export type ILinkedInPageChangeMessage = IMessage<
-  "linkedin-page-change",
-  { type: "resume" | "other" }
+  'linkedin-page-change',
+  { type: 'resume' | 'other' }
 >;
 
 // const onMessageExternal = browser.runtime.onMessageExternal
@@ -527,7 +528,7 @@ export type ILinkedInPageChangeMessage = IMessage<
 
 const onMessage = browser.runtime.onMessage;
 export const message$: Observable<{
-  message: IMessage<string, {}>;
+  message: IMessage<string, object>;
   sender: Runtime.MessageSender;
 }> = fromEventPattern(
   onMessage.addListener.bind(onMessage),
@@ -549,7 +550,7 @@ export function install(urls: string[]) {
     // tslint:disable-next-line:no-any
     (listen: any) =>
       onHeadersReceived.addListener(listen, {
-        types: ["main_frame", "xmlhttprequest", "sub_frame"],
+        types: ['main_frame', 'xmlhttprequest', 'sub_frame'],
         urls,
       }),
     onHeadersReceived.removeListener.bind(onHeadersReceived)
@@ -565,13 +566,13 @@ export function installOnBeforeSendHeaders(
   urlPatterns: string[]
 ): Observable<any> {
   return fromEventPattern(
-    (handler) =>
+    handler =>
       browser.webRequest.onBeforeSendHeaders.addListener(
         handler,
         { urls: urlPatterns },
-        ["requestHeaders"]
+        ['requestHeaders']
       ),
-    (handler) => browser.webRequest.onBeforeSendHeaders.removeListener(handler)
+    handler => browser.webRequest.onBeforeSendHeaders.removeListener(handler)
   ).pipe(share());
 }
 
@@ -581,8 +582,8 @@ export function installOnBeforeRequest(urls: string[]) {
     (listener: any) =>
       onBeforeRequest.addListener(
         listener,
-        { urls, types: ["main_frame", "xmlhttprequest", "sub_frame"] },
-        ["requestBody"]
+        { urls, types: ['main_frame', 'xmlhttprequest', 'sub_frame'] },
+        ['requestBody']
       ),
     onBeforeRequest.removeListener.bind(onBeforeRequest)
   );
@@ -590,8 +591,8 @@ export function installOnBeforeRequest(urls: string[]) {
 
 export function onCookiesChange$(domain: string): Observable<Cookies.Cookie> {
   return cookiesChange$.pipe(
-    filter((info) => info.cookie.domain === domain),
-    map((info) => info.cookie)
+    filter(info => info.cookie.domain === domain),
+    map(info => info.cookie)
   );
 }
 
@@ -599,7 +600,7 @@ export function getSpecifyDomainCookiesChange(
   domain: string
 ): Observable<Cookies.OnChangedChangeInfoType> {
   return cookiesChange$.pipe(
-    filter((changeInfo) => changeInfo.cookie.domain === domain)
+    filter(changeInfo => changeInfo.cookie.domain === domain)
   );
 }
 

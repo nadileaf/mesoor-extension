@@ -1,8 +1,8 @@
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import React, { useEffect } from "react";
-import { TabType } from "./App";
-import { ThemeProvider } from "@/components/theme-provider";
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/app-sidebar';
+import React, { useEffect } from 'react';
+import { TabType } from './App';
+import { ThemeProvider } from '@/components/theme-provider';
 
 interface LayoutProps {
   children: React.ReactNode;

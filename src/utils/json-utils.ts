@@ -20,7 +20,7 @@ function findValueByKey(obj: any, key: string): any {
     // 跳过原型链上的属性
     if (Object.prototype.hasOwnProperty.call(obj, k)) {
       const value = obj[k];
-      
+
       // 如果属性值是对象或数组，递归搜索
       if (value !== null && typeof value === 'object') {
         const result = findValueByKey(value, key);
@@ -72,7 +72,4 @@ function findAllValuesByKey(obj: any, key: string): any[] {
   return results;
 }
 
-export {
-  findValueByKey,
-  findAllValuesByKey
-}
+export { findAllValuesByKey, findValueByKey };

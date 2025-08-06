@@ -1,17 +1,14 @@
-import browser, {
-  Cookies,
-  Runtime,
-} from "webextension-polyfill";
-import { fromEventPattern, Observable } from "rxjs";
-import { map, filter, share, tap } from "rxjs/operators";
+import browser, { Cookies, Runtime } from 'webextension-polyfill';
+import { fromEventPattern, Observable } from 'rxjs';
+import { map, filter, share, tap } from 'rxjs/operators';
 
 interface ResumeSyncErrorMessage {
-  status: number
-  data: any
+  status: number;
+  data: any;
 }
 
 export interface ResumeSyncErrorMessageWrapper {
-  response: ResumeSyncErrorMessage
+  response: ResumeSyncErrorMessage;
 }
 
 export interface IMessage<TYPE extends string, P> {
@@ -31,6 +28,11 @@ export interface IMessage<TYPE extends string, P> {
   reply?(response: any): void;
 }
 
+export type IViewResumeMessage = IMessage<
+  'sync-html',
+  { origin: string; html: string; url: string }
+>;
+
 interface IEvalablePayload {
   /**
    * @example: 51job.com | zhaopin.com | global
@@ -42,42 +44,44 @@ interface IEvalablePayload {
   code: string;
 }
 
-interface IInitialStateRequest {}
+interface IInitialStateRequest {
+  // Currently empty, will be extended as needed
+}
 
 interface IInitialStateResponse {
   [url: string]: number;
 }
 
-export type IResumeDownloadMessage = IMessage<"download", { origin: string }>;
+export type IResumeDownloadMessage = IMessage<'download', { origin: string }>;
 export type SyncHtmlMessage = IMessage<
-  "sync-html",
+  'sync-html',
   { origin: string; html: string; url: string }
 >;
 export type IViewJobMessage = IMessage<
-  "view-job",
+  'view-job',
   { origin: string; html: string; url: string; channel: string }
 >;
-export type IHistoryUpdate = IMessage<"history-update", { url: string }>;
-export type IEvalableMessage = IMessage<"eval", IEvalablePayload>;
-export type IEvalableReturnMessage = IMessage<"eval", Object>;
+export type IHistoryUpdate = IMessage<'history-update', { url: string }>;
+export type IEvalableMessage = IMessage<'eval', IEvalablePayload>;
+export type IEvalableReturnMessage = IMessage<'eval', object>;
 export type ILoginMessage = IMessage<
-  "login",
+  'login',
   { origin: string; timestamp: number; url: string }
 >;
 export type IInitialStateRequestMessage = IMessage<
-  "initLogin",
+  'initLogin',
   IInitialStateRequest
 >;
 export type IInitialStateResponseMessage = IMessage<
-  "initLogin",
+  'initLogin',
   IInitialStateResponse
 >;
 export type msgPostPosition = IMessage<
-  "post_position",
+  'post_position',
   { originData: string; origin: string; responseText?: string }
 >;
 export type IViewResumeEmailMessage = IMessage<
-  "view-resume-send-mail",
+  'view-resume-send-mail',
   {
     url: string;
     company: string;
@@ -89,19 +93,19 @@ export type IViewResumeEmailMessage = IMessage<
 >;
 
 export type CheckJobDesMessage = IMessage<
-  "check-job-des",
+  'check-job-des',
   { language: string; location: string; jobdesc: string }
 >;
 // dashboardMessager收到dashboard用postMessage发来用户手动搜索的消息
 // 然后发送ISearchMessage类型的消息给background
 export type ISearchMessage = IMessage<
-  "search",
+  'search',
   { searchWord: string; url: string }
 >;
 
 // background收到ISearchMessage之后发送ISearchMessageWithDashboardTabId给内容脚本search的message
 export type ISearchMessageWithDashboardTabId = IMessage<
-  "search-with-dashboard-tab-id",
+  'search-with-dashboard-tab-id',
   {
     searchWord: string;
     url: string;
@@ -111,7 +115,7 @@ export type ISearchMessageWithDashboardTabId = IMessage<
 
 // search内容脚本返回给background的反馈消息以及background根据dashbaordTabId给dashboardMessager发送的消息
 export type ISearchMessageFeedback = IMessage<
-  "search-feedback",
+  'search-feedback',
   {
     isSuccess: boolean;
     dashboardTabId: number; // dashboardTabId似乎可以通过tabs.query找到，之后也许可以把这个字段删掉
@@ -120,23 +124,23 @@ export type ISearchMessageFeedback = IMessage<
 >;
 
 export type IReceiveZhaopinHTMLMessage = IMessage<
-  "receive_zhaopin_html",
-  Object
+  'receive_zhaopin_html',
+  object
 >;
 export type InterviewWuyouChatMessage = IMessage<
-  "interview_wuyou_chat_message",
-  Object
+  'interview_wuyou_chat_message',
+  object
 >;
 // 领英上同步简历时，background 向 syncReceiveResumeLinkedin 上发这种消息，用来获取页面的 html
 export type IReceiveLinkedinHTMLMessage = IMessage<
-  "receive_linkedin_html",
-  Object
+  'receive_linkedin_html',
+  object
 >;
-export type IReceiveLiepinHTMLMessage = IMessage<"receive_liepin_html", Object>;
+export type IReceiveLiepinHTMLMessage = IMessage<'receive_liepin_html', object>;
 
 // dupeCheck发送给background开始查重的message
 export type IDupeCheckTriggerMessage = IMessage<
-  "dupe-check-trigger",
+  'dupe-check-trigger',
   {
     openId: string;
     tenant: string;
@@ -160,25 +164,25 @@ export interface ISyncResumeBaseConfig {
 
 // 通知dupeCheck开始手抓简历 -> dupeCheck按钮UI应该发生变化，现在一般用在lagou监听到json请求时
 export type ISyncResumeStartMessage = IMessage<
-  "sync-resume-start",
+  'sync-resume-start',
   {
     // tslint:disable-next-line:max-line-length
     type:
-      | "lagou"
-      | "other"
-      | "shixiseng"
-      | "bosszpRecommand"
-      | "maimai"
-      | "bosszpSearch"
-      | "zhaopinRecommend"
-      | "bossChat";
+      | 'lagou'
+      | 'other'
+      | 'shixiseng'
+      | 'bosszpRecommand'
+      | 'maimai'
+      | 'bosszpSearch'
+      | 'zhaopinRecommend'
+      | 'bossChat';
     baseConfig?: ISyncResumeBaseConfig;
   }
 >;
 
 // 手抓完成之后，给dupeCheck发送反馈 -> dupeCheck UI发生变化
 export type ISyncResumeFeedbackMessage = IMessage<
-  "sync-resume-feedback",
+  'sync-resume-feedback',
   {
     isSyncResumeError: boolean; // 手抓简历出错
     errorCode?: number; // 报错的错误码
@@ -190,7 +194,7 @@ export type ISyncResumeFeedbackMessage = IMessage<
 
 // 2022-04-18 职位刷新用接口
 export type IRefreshJobMessage = IMessage<
-  "refreshJob",
+  'refreshJob',
   {
     origin: string;
     account: string;
@@ -214,7 +218,7 @@ interface IRefreshResponse {
 }
 
 export type IRefreshJobFeedBack = IMessage<
-  "refreshJob-feedback",
+  'refreshJob-feedback',
   {
     site: ISite;
     loading: boolean;
@@ -235,7 +239,7 @@ export interface IPrefillMessage {
 }
 
 export type IPrefillFeedBackMessage = IMessage<
-  "prefill-feedback",
+  'prefill-feedback',
   {
     isError: boolean;
     feedbackMessage: string;
@@ -245,7 +249,7 @@ export type IPrefillFeedBackMessage = IMessage<
 interface PrefillConfig {
   displayName: string;
   value: string | string[];
-  displayType: "input" | "arrayText" | "textarea";
+  displayType: 'input' | 'arrayText' | 'textarea';
   initialData: any;
 }
 
@@ -292,12 +296,12 @@ export interface BackGroundConfig {
 }
 
 // liepin 特殊用户在调用 https://h.liepin.com/resumeview/getresumedetailcoreview.json 请求之后 -> 调用 sync-receive-resume
-export type ILiepinContactImgMessage = IMessage<"liepin-contact-img", {}>;
+export type ILiepinContactImgMessage = IMessage<'liepin-contact-img', {}>;
 
 // Linkedin页面变化通知给dupeCheck -> dupeCheck根据type的信息来决定UI变化，如果是resume那就显示按钮，如果是other就隐藏按钮
 export type ILinkedInPageChangeMessage = IMessage<
-  "linkedin-page-change",
-  { type: "resume" | "other" }
+  'linkedin-page-change',
+  { type: 'resume' | 'other' }
 >;
 
 const onMessage = browser.runtime.onMessage;
@@ -309,7 +313,7 @@ export const message$: Observable<{
   onMessage.removeListener.bind(onMessage),
   (message, sender: Runtime.MessageSender) => ({ message, sender })
 ).pipe(
-  tap((msg) => console.log("message$ send", msg)),
+  tap(msg => console.log('message$ send', msg)),
   share()
 );
 
@@ -322,8 +326,8 @@ const cookiesChange$: Observable<Cookies.OnChangedChangeInfoType> =
 
 export function onCookiesChange$(domain: string): Observable<Cookies.Cookie> {
   return cookiesChange$.pipe(
-    filter((info) => info.cookie.domain === domain),
-    map((info) => info.cookie)
+    filter(info => info.cookie.domain === domain),
+    map(info => info.cookie)
   );
 }
 
@@ -331,6 +335,6 @@ export function getSpecifyDomainCookiesChange(
   domain: string
 ): Observable<Cookies.OnChangedChangeInfoType> {
   return cookiesChange$.pipe(
-    filter((changeInfo) => changeInfo.cookie.domain === domain)
+    filter(changeInfo => changeInfo.cookie.domain === domain)
   );
 }

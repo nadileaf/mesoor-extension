@@ -1,4 +1,4 @@
-import browser from "webextension-polyfill";
+import browser from 'webextension-polyfill';
 
 export const isTabIdExists = async (tabId: number): Promise<boolean> => {
   const allTabs = await browser.tabs.query({});

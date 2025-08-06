@@ -1,16 +1,13 @@
-function delay (n: number) {
-  return new Promise<void>(ok => setTimeout(ok, n))
+function delay(n: number) {
+  return new Promise<void>(ok => setTimeout(ok, n));
 }
 
 function formatString(s: string, ...args: string[]): string {
-  let result = s
+  let result = s;
   for (let arg of args) {
-    result = result.replace(/{\d+}/, arg)
+    result = result.replace(/{\d+}/, arg);
   }
-  return result
+  return result;
 }
 
-export {
-  delay,
-  formatString
-}
+export { delay, formatString };

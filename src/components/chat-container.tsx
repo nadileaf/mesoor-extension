@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from 'react';
 
 // 引入browser polyfill
 declare global {
@@ -21,7 +21,7 @@ declare global {
 
 // 等待browser API可用或使用chrome作为回退
 function ensureBrowserAPI(): Promise<any> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     // 如果已经可用，直接返回
     if (window.browser) {
       resolve(window.browser);
@@ -40,7 +40,7 @@ function ensureBrowserAPI(): Promise<any> {
         // 超时后使用chrome作为回退
         clearInterval(checkInterval);
         console.warn(
-          "Browser polyfill not available, using chrome as fallback"
+          'Browser polyfill not available, using chrome as fallback'
         );
         window.browser = (window as any).chrome;
         resolve(window.browser);
@@ -53,7 +53,7 @@ function ensureBrowserAPI(): Promise<any> {
 async function compressAndEncodeBase64(input: string) {
   const uint8Array = new TextEncoder().encode(input);
   const compressedStream = new Response(
-    new Blob([uint8Array]).stream().pipeThrough(new CompressionStream("gzip"))
+    new Blob([uint8Array]).stream().pipeThrough(new CompressionStream('gzip'))
   ).arrayBuffer();
   const compressedUint8Array = new Uint8Array(await compressedStream);
   return btoa(String.fromCharCode(...compressedUint8Array));
@@ -92,12 +92,12 @@ async function createIframe(input: Record<string, any>) {
   const iframeUrl = `https://agent.mesoor.com/chatbot/uo6f9m16c0ymkBTR?${params}`;
 
   if (iframeUrl.length > 2048) {
-    console.error("URL过长，请减少输入数量以防止机器人加载失败");
+    console.error('URL过长，请减少输入数量以防止机器人加载失败');
   }
 
-  const iframe = document.createElement("iframe");
-  iframe.allow = "fullscreen;microphone";
-  iframe.title = "mesoor chatbot window";
+  const iframe = document.createElement('iframe');
+  iframe.allow = 'fullscreen;microphone';
+  iframe.title = 'mesoor chatbot window';
   iframe.src = iframeUrl;
   iframe.style.cssText = `border:none;width:100%;height:100%;overflow:hidden;user-select:none;`;
 
@@ -107,20 +107,20 @@ async function createIframe(input: Record<string, any>) {
 // 从JWT token中解析payload
 function parseJwt(token: string) {
   try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)
-        .split("")
+        .split('')
         .map(function (c) {
-          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         })
-        .join("")
+        .join('')
     );
 
     return JSON.parse(jsonPayload);
   } catch (e) {
-    console.error("Failed to parse JWT token:", e);
+    console.error('Failed to parse JWT token:', e);
     return null;
   }
 }
@@ -138,18 +138,18 @@ const ChatContainer: React.FC = () => {
         // const token = await (window as any).browser?.cookies?.get({
         const browserAPI = await ensureBrowserAPI();
         const token = await browserAPI?.cookies?.get({
-          url: "https://tip.mesoor.com",
-          name: "token",
+          url: 'https://tip.mesoor.com',
+          name: 'token',
         });
 
         const _token =
           token?.value ||
           import.meta.env.VITE_LOCAL_TOKEN ||
-          "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VybmFtZTrliJjmlY_lqZUiLCJ0ZW5hbnRNZW1iZXIiOiJzaGFuZ2hhaWRlemh1cWl5ZWd1YW5saS0xODhUNTAxMTNiZjYtYjA5YS00M2Y2LWJiZmUtMGRmYjg3ZTNkOTI4IiwidGVuYW50SWQiOjE4OCwiaXNzIjoiZGVmYXVsdCIsInRlbmFudEFsaWFzIjoic2hhbmdoYWlkZXpodXFpeWVndWFubGktMTg4IiwiZXhwIjoxNzYxMTAzMTQyMDg0LCJ1c2VySWQiOiI1MDExM2JmNi1iMDlhLTQzZjYtYmJmZS0wZGZiODdlM2Q5MjgiLCJwcm9qZWN0SWQiOiJkZWZhdWx0IiwiaWF0IjoxNzUzMzI3MTQyMDg0fQ.EFHYDoBFJpwbw8pdMCB-TaZRRCbGFAiW8Qnyl0BPtQs";
-        console.log("token", _token);
+          'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VybmFtZTrliJjmlY_lqZUiLCJ0ZW5hbnRNZW1iZXIiOiJzaGFuZ2hhaWRlemh1cWl5ZWd1YW5saS0xODhUNTAxMTNiZjYtYjA5YS00M2Y2LWJiZmUtMGRmYjg3ZTNkOTI4IiwidGVuYW50SWQiOjE4OCwiaXNzIjoiZGVmYXVsdCIsInRlbmFudEFsaWFzIjoic2hhbmdoYWlkZXpodXFpeWVndWFubGktMTg4IiwiZXhwIjoxNzYxMTAzMTQyMDg0LCJ1c2VySWQiOiI1MDExM2JmNi1iMDlhLTQzZjYtYmJmZS0wZGZiODdlM2Q5MjgiLCJwcm9qZWN0SWQiOiJkZWZhdWx0IiwiaWF0IjoxNzUzMzI3MTQyMDg0fQ.EFHYDoBFJpwbw8pdMCB-TaZRRCbGFAiW8Qnyl0BPtQs';
+        console.log('token', _token);
 
         if (!_token) {
-          console.error("No token found plz login tip");
+          console.error('No token found plz login tip');
           containerRef.current.innerHTML = `
             <div class="flex items-center justify-center h-full">
               <div class="text-center">
@@ -163,7 +163,7 @@ const ChatContainer: React.FC = () => {
 
         const payload = parseJwt(_token);
         if (!payload || !payload.userId) {
-          console.error("Invalid token: no user_id found", payload);
+          console.error('Invalid token: no user_id found', payload);
           containerRef.current.innerHTML = `
             <div class="flex items-center justify-center h-full">
               <div class="text-center">
@@ -177,17 +177,17 @@ const ChatContainer: React.FC = () => {
 
         console.log(payload);
         const iframe = await createIframe({
-          "sys.user_id": payload.userId,
+          'sys.user_id': payload.userId,
           user_id: payload.userId,
           token: _token,
           tenantId: payload.tenantAlias,
         });
 
         // 清空容器并添加iframe
-        containerRef.current.innerHTML = "";
+        containerRef.current.innerHTML = '';
         containerRef.current.appendChild(iframe);
       } catch (error) {
-        console.error("Failed to initialize chat:", error);
+        console.error('Failed to initialize chat:', error);
         if (containerRef.current) {
           containerRef.current.innerHTML = `
             <div class="flex items-center justify-center h-full">

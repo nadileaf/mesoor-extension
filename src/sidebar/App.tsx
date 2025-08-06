@@ -1,18 +1,18 @@
-import { useEffect, useState } from "react";
-import ChatContainer from "@/components/chat-container";
-import SettingsContainer from "@/components/settings-container";
+import ChatContainer from '@/components/chat-container';
+import SettingsContainer from '@/components/settings-container';
+import { useState } from 'react';
 
-import Layout from "./layout";
+import Layout from './layout';
 
-export type TabType = "Sourcing" | "settings";
+export type TabType = 'Sourcing' | 'settings';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabType>("Sourcing");
+  const [activeTab, setActiveTab] = useState<TabType>('Sourcing');
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
       <div className="w-full h-full overflow-hidden">
-        {activeTab === "Sourcing" ? <ChatContainer /> : <SettingsContainer />}
+        {activeTab === 'Sourcing' ? <ChatContainer /> : <SettingsContainer />}
       </div>
     </Layout>
   );

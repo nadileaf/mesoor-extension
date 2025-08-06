@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import {
   AlertDialog,
@@ -12,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
 // 引入browser polyfill支持
 declare global {
@@ -31,8 +31,8 @@ interface VersionInfo {
 }
 
 async function queryVersion() {
-  const baseUrl = "https://cdn-fe.mesoor.com/tip-plugins/mesoor/";
-  const versionUrl = baseUrl + "version.json";
+  const baseUrl = 'https://cdn-fe.mesoor.com/tip-plugins/mesoor/';
+  const versionUrl = baseUrl + 'version.json';
 
   let versionData: { version: string; file: string };
 
@@ -48,7 +48,7 @@ async function queryVersion() {
     // 解析 JSON 响应
     versionData = await response.json();
   } catch (error) {
-    console.error("Error fetching version.json:", error);
+    console.error('Error fetching version.json:', error);
     // 根据你的需求处理错误，例如抛出或返回默认值
     throw error; // 重新抛出错误以便上层捕获
   }
@@ -61,10 +61,10 @@ async function queryVersion() {
 function compareVersions(
   current: string,
   latest: string
-): "up-to-date" | "outdated" | "error" {
+): 'up-to-date' | 'outdated' | 'error' {
   try {
-    const currentParts = current.split(".").map(Number);
-    const latestParts = latest.split(".").map(Number);
+    const currentParts = current.split('.').map(Number);
+    const latestParts = latest.split('.').map(Number);
 
     for (
       let i = 0;
@@ -75,16 +75,16 @@ function compareVersions(
       const latestPart = latestParts[i] || 0;
 
       if (currentPart < latestPart) {
-        return "outdated";
+        return 'outdated';
       } else if (currentPart > latestPart) {
-        return "up-to-date";
+        return 'up-to-date';
       }
     }
 
-    return "up-to-date";
+    return 'up-to-date';
   } catch (error) {
-    console.error("Version comparison error:", error);
-    return "error";
+    console.error('Version comparison error:', error);
+    return 'error';
   }
 }
 
@@ -96,8 +96,8 @@ const SettingsContainer: React.FC = () => {
   const [latestVersion, setLatestVersion] = useState<VersionInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<
-    "idle" | "checking" | "up-to-date" | "outdated" | "error"
-  >("idle");
+    'idle' | 'checking' | 'up-to-date' | 'outdated' | 'error'
+  >('idle');
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [updateDialogInfo, setUpdateDialogInfo] = useState<{
     currentVersion: string;
@@ -108,10 +108,10 @@ const SettingsContainer: React.FC = () => {
   const getManifestVersion = () => {
     try {
       return (
-        (window as any).browser?.runtime?.getManifest?.()?.version || "1.0.11"
+        (window as any).browser?.runtime?.getManifest?.()?.version || '1.0.11'
       );
     } catch {
-      return "1.0.11";
+      return '1.0.11';
     }
   };
 
@@ -120,7 +120,7 @@ const SettingsContainer: React.FC = () => {
     const loadSettings = async () => {
       try {
         const result = await (window as any).browser?.storage?.sync?.get([
-          "wait",
+          'wait',
         ]);
 
         if (result) {
@@ -129,7 +129,7 @@ const SettingsContainer: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Failed to load settings:", error);
+        console.error('Failed to load settings:', error);
       } finally {
         setIsLoading(false);
       }
@@ -146,7 +146,7 @@ const SettingsContainer: React.FC = () => {
       });
       setSettings(newSettings);
     } catch (error) {
-      console.error("Failed to save settings:", error);
+      console.error('Failed to save settings:', error);
     }
   };
 
@@ -160,7 +160,7 @@ const SettingsContainer: React.FC = () => {
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
-    setUpdateStatus("checking");
+    setUpdateStatus('checking');
 
     try {
       const latestVersionInfo = await queryVersion();
@@ -170,21 +170,21 @@ const SettingsContainer: React.FC = () => {
       const status = compareVersions(currentVersion, latestVersionInfo.version);
       setUpdateStatus(status);
 
-      if (status === "outdated") {
+      if (status === 'outdated') {
         setUpdateDialogInfo({
           currentVersion,
           latestVersion: latestVersionInfo.version,
         });
         setShowUpdateDialog(true);
-      } else if (status === "up-to-date") {
-        alert("当前已是最新版本！");
+      } else if (status === 'up-to-date') {
+        alert('当前已是最新版本！');
       } else {
-        alert("版本检查失败，请稍后重试");
+        alert('版本检查失败，请稍后重试');
       }
     } catch (error) {
-      console.error("Failed to check for updates:", error);
-      setUpdateStatus("error");
-      alert("检查更新失败，请检查网络连接");
+      console.error('Failed to check for updates:', error);
+      setUpdateStatus('error');
+      alert('检查更新失败，请检查网络连接');
     } finally {
       setIsCheckingUpdate(false);
     }
@@ -194,48 +194,48 @@ const SettingsContainer: React.FC = () => {
   const getVersionStatusText = () => {
     const currentVersion = getManifestVersion();
 
-    if (updateStatus === "checking") {
-      return "检查中...";
-    } else if (updateStatus === "outdated" && latestVersion) {
+    if (updateStatus === 'checking') {
+      return '检查中...';
+    } else if (updateStatus === 'outdated' && latestVersion) {
       return `可更新至 v${latestVersion.version}`;
-    } else if (updateStatus === "up-to-date") {
-      return "已是最新版本";
-    } else if (updateStatus === "error") {
-      return "检查失败";
+    } else if (updateStatus === 'up-to-date') {
+      return '已是最新版本';
+    } else if (updateStatus === 'error') {
+      return '检查失败';
     } else {
-      return "";
+      return '';
     }
   };
 
   // 获取版本状态颜色
   const getVersionStatusColor = () => {
-    if (updateStatus === "checking") {
-      return "text-muted-foreground";
-    } else if (updateStatus === "outdated") {
-      return "text-orange-600";
-    } else if (updateStatus === "up-to-date") {
-      return "text-green-600";
-    } else if (updateStatus === "error") {
-      return "text-red-600";
+    if (updateStatus === 'checking') {
+      return 'text-muted-foreground';
+    } else if (updateStatus === 'outdated') {
+      return 'text-orange-600';
+    } else if (updateStatus === 'up-to-date') {
+      return 'text-green-600';
+    } else if (updateStatus === 'error') {
+      return 'text-red-600';
     } else {
-      return "text-muted-foreground";
+      return 'text-muted-foreground';
     }
   };
 
   // 获取版本检查按钮文本
   const getVersionCheckButtonText = () => {
     if (isCheckingUpdate) {
-      return "检查中...";
-    } else if (updateStatus === "outdated") {
-      return "下载更新";
+      return '检查中...';
+    } else if (updateStatus === 'outdated') {
+      return '下载更新';
     } else {
-      return "检查更新";
+      return '检查更新';
     }
   };
 
   // 处理版本检查/下载按钮点击
   const handleVersionAction = () => {
-    if (updateStatus === "outdated" && latestVersion) {
+    if (updateStatus === 'outdated' && latestVersion) {
       downloadPlugin();
     } else {
       handleCheckUpdate();
@@ -244,7 +244,7 @@ const SettingsContainer: React.FC = () => {
 
   async function downloadPlugin() {
     if (latestVersion?.file) {
-      window.open(latestVersion.file, "_blank");
+      window.open(latestVersion.file, '_blank');
     }
   }
 
@@ -299,7 +299,7 @@ const SettingsContainer: React.FC = () => {
               </div>
               <Switch
                 checked={settings.autoSync}
-                onCheckedChange={() => handleToggle("autoSync")}
+                onCheckedChange={() => handleToggle('autoSync')}
               />
             </div>
 
@@ -346,7 +346,7 @@ const SettingsContainer: React.FC = () => {
                 onClick={handleVersionAction}
                 size="sm"
                 disabled={isCheckingUpdate}
-                variant={updateStatus === "outdated" ? "default" : "outline"}
+                variant={updateStatus === 'outdated' ? 'default' : 'outline'}
               >
                 {getVersionCheckButtonText()}
               </Button>

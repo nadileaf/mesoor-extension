@@ -1,31 +1,31 @@
-import "./dupe-check.css";
+import './dupe-check.css';
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { isNil } from "lodash-es";
-import browser from "webextension-polyfill";
-import { v4 as uuid } from "uuid";
-import Draggable from "react-draggable";
-import {
-  IDupeCheckTriggerMessage,
-  ISyncResumeBaseConfig,
-} from "../../models/stream";
-import {
-  isISyncResumeFeedbackMessage,
-  isISyncResumeStartMessage,
-} from "../../utils/message-fileter";
-import { delay } from "../../utils/index";
-import { filter } from "rxjs/operators";
-import { env$, wait$ } from "../../models/preference";
+import { isNil } from 'lodash-es';
 import {
   AlertCircle,
   CheckCircle,
   Loader2,
-  Users,
   RefreshCw,
-} from "lucide-react";
+  Users,
+} from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Draggable from 'react-draggable';
+import { filter } from 'rxjs/operators';
+import { v4 as uuid } from 'uuid';
+import browser from 'webextension-polyfill';
+import { env$, wait$ } from '../../models/preference';
+import {
+  IDupeCheckTriggerMessage,
+  ISyncResumeBaseConfig,
+} from '../../models/stream';
+import { delay } from '../../utils/index';
+import {
+  isISyncResumeFeedbackMessage,
+  isISyncResumeStartMessage,
+} from '../../utils/message-fileter';
 
 // 个人版插件列表
-const personalList = ["薪事力招聘", "易服智享"];
+const personalList = ['薪事力招聘', '易服智享'];
 
 const isPersonalPlug = personalList.includes(
   browser.runtime.getManifest().name
@@ -68,24 +68,24 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
   const [state, setState] = useState<ModernDupeCheckState>(() => {
     // 判断是否在支持的网站上激活
     const isActive = !(
-      location.href.includes("easy.lagou.com") ||
-      location.href.includes("hr.shixiseng.com") ||
-      location.href.includes("linkedin.com") ||
-      location.href.includes("zhipin.com") ||
-      (location.href.includes("maimai.cn/ent") &&
-        !location.href.includes("maimai.cn/ent//v41/recruit/talents")) ||
-      (location.href.includes("rd6.zhaopin.com") &&
-        !location.href.includes("rd6.zhaopin.com/resume/detail")) ||
-      location.href.includes("58.com") ||
-      location.href.includes("linkedin.cn") ||
-      (location.href.includes("51job.com") &&
-        location.href.includes("51job.com/Revision/online/chat")) ||
-      location.href.includes("51job.com/Revision/online/talent/search") ||
-      location.href.includes("51job.com/Revision/online/talentRecommend") ||
-      location.href.includes("duolie.com") ||
+      location.href.includes('easy.lagou.com') ||
+      location.href.includes('hr.shixiseng.com') ||
+      location.href.includes('linkedin.com') ||
+      location.href.includes('zhipin.com') ||
+      (location.href.includes('maimai.cn/ent') &&
+        !location.href.includes('maimai.cn/ent//v41/recruit/talents')) ||
+      (location.href.includes('rd6.zhaopin.com') &&
+        !location.href.includes('rd6.zhaopin.com/resume/detail')) ||
+      location.href.includes('58.com') ||
+      location.href.includes('linkedin.cn') ||
+      (location.href.includes('51job.com') &&
+        location.href.includes('51job.com/Revision/online/chat')) ||
+      location.href.includes('51job.com/Revision/online/talent/search') ||
+      location.href.includes('51job.com/Revision/online/talentRecommend') ||
+      location.href.includes('duolie.com') ||
       // 猎聘诚猎通沟通列表页面
-      (location.href.includes("h.liepin.com") &&
-        location.href.includes("h.liepin.com/im/showmsgnewpage"))
+      (location.href.includes('h.liepin.com') &&
+        location.href.includes('h.liepin.com/im/showmsgnewpage'))
     );
 
     // const isActive = true;
@@ -99,7 +99,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       isSyncResumeError: false,
       isDupeCheckError: false,
       isDragging: false,
-      env: "tip.mesoor.com",
+      env: 'tip.mesoor.com',
       wait: true,
       isConfirmSynchronize: false,
     };
@@ -115,14 +115,14 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       updates: Partial<ModernDupeCheckState> | boolean,
       additionalState: Partial<ModernDupeCheckState> = {}
     ) => {
-      if (typeof updates === "object") {
-        setState((prev) => ({ ...prev, ...updates }));
+      if (typeof updates === 'object') {
+        setState(prev => ({ ...prev, ...updates }));
         return;
       }
 
       // 如果是布尔值，则进行完整重置
       const isActive = updates;
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
         isActive,
         isSynchronizingResume: isActive,
@@ -156,46 +156,46 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       isConfirmSynchronize,
     } = state;
 
-    if (!isActive) return "未激活";
+    if (!isActive) return '未激活';
 
-    if (isSyncResumeError && errorCode === 403) return "已到达资源限制";
-    if (isSyncResumeError && errorCode === 480) return "简历解析出错";
-    if (isSyncResumeError && errorCode === 666) return "同步简历超时";
+    if (isSyncResumeError && errorCode === 403) return '已到达资源限制';
+    if (isSyncResumeError && errorCode === 480) return '简历解析出错';
+    if (isSyncResumeError && errorCode === 666) return '同步简历超时';
     if (isSyncResumeError && errorCode === 430) {
       try {
         return errorMessage
-          ? JSON.parse(errorMessage).message || "同步简历失败"
-          : "同步简历失败";
+          ? JSON.parse(errorMessage).message || '同步简历失败'
+          : '同步简历失败';
       } catch {
-        return "同步简历失败";
+        return '同步简历失败';
       }
     }
-    if (isSyncResumeError) return "同步简历失败";
+    if (isSyncResumeError) return '同步简历失败';
 
     if (isSynchronizingResume) {
       return wait
         ? isConfirmSynchronize
-          ? "正在同步简历..."
-          : "同步该简历?"
-        : "正在同步简历...";
+          ? '正在同步简历...'
+          : '同步该简历?'
+        : '正在同步简历...';
     }
 
-    if (isCheckingDupe) return "正在检查...";
-    if (isDupeCheckError) return "检查失败, 点击重试";
+    if (isCheckingDupe) return '正在检查...';
+    if (isDupeCheckError) return '检查失败, 点击重试';
 
     if (isChecked) {
       if (dupeCheckResult === false) {
         return isPersonalPlug
-          ? "不存在重复简历"
-          : "不存在重复简历, 点击查看召乎上简历";
+          ? '不存在重复简历'
+          : '不存在重复简历, 点击查看召乎上简历';
       } else {
         return isPersonalPlug
-          ? "存在重复简历"
-          : "存在重复简历, 点击查看召乎上简历";
+          ? '存在重复简历'
+          : '存在重复简历, 点击查看召乎上简历';
       }
     }
 
-    return "同步完成，点击查看人才库简历";
+    return '同步完成，点击查看人才库简历';
   }, [state]);
 
   // 获取图标
@@ -252,7 +252,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
     const msg: IDupeCheckTriggerMessage = {
       requestId: uuid(),
-      type: "dupe-check-trigger",
+      type: 'dupe-check-trigger',
       payload: {
         openId: openId!,
         tenant: tenant!,
@@ -265,7 +265,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
   // 确认同步逻辑
   const confirmSync = useCallback(() => {
     const message: IConfirmSynchronizationMessage = {
-      type: "confirm-synchronize",
+      type: 'confirm-synchronize',
       requestId: state.requestId,
     };
 
@@ -278,7 +278,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     const { dupeCheckResult, openId } = state;
     if (isNil(dupeCheckResult)) return;
 
-    const secondaryDomain = "mesoor.com";
+    const secondaryDomain = 'mesoor.com';
     // 在浏览器环境中默认使用生产环境配置
     const hostEnv = secondaryDomain;
 
@@ -319,7 +319,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     // 同步完成后的跳转逻辑
     if (isSynchronized && !isSyncResumeError && !isCheckingDupe && !isChecked) {
       if (isPersonalPlug) {
-        const secondaryDomain = "mesoor.com";
+        const secondaryDomain = 'mesoor.com';
         window.open(
           `https://system.${secondaryDomain}/dashboard#/candidates/search?openid=${openId}`
         );
@@ -357,12 +357,12 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
           baseConfig.bindingSelector.iframeSelectorPath!.selector;
       }
 
-      if (_type === "lagou") {
-        maskSelectorPath = "div.react-modal-wrap.resume-dialog";
+      if (_type === 'lagou') {
+        maskSelectorPath = 'div.react-modal-wrap.resume-dialog';
       }
 
       if (!maskSelectorPath) {
-        console.error("no mask selector");
+        console.error('no mask selector');
         return;
       }
 
@@ -398,14 +398,14 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
       if (isNil(mask)) return;
 
-      mask.addEventListener("click", (e: Event) => {
+      mask.addEventListener('click', (e: Event) => {
         const target = e.target as HTMLElement;
         const className = target.className;
 
         if (
-          className === "react-modal-wrap resume-dialog" ||
-          className.includes("el-dialog__wrapper") ||
-          className.includes("dialog-layer") ||
+          className === 'react-modal-wrap resume-dialog' ||
+          className.includes('el-dialog__wrapper') ||
+          className.includes('dialog-layer') ||
           (maskClassName && className.includes(maskClassName))
         ) {
           resetState({ isActive: false });
@@ -428,12 +428,12 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
           baseConfig.bindingSelector.iframeSelectorPath!.selector;
       }
 
-      if (_type === "lagou") {
-        closeButtonSelectorPath = "div.switch-close";
+      if (_type === 'lagou') {
+        closeButtonSelectorPath = 'div.switch-close';
       }
 
       if (!closeButtonSelectorPath) {
-        console.log("no close button selector");
+        console.log('no close button selector');
         return;
       }
 
@@ -473,7 +473,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
       if (isNil(closeButton)) return;
 
-      closeButton.addEventListener("click", () => {
+      closeButton.addEventListener('click', () => {
         resetState({ isActive: false });
       });
     },
@@ -485,7 +485,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     const listener = (msg: any) => {
       if (!isISyncResumeFeedbackMessage(msg)) return;
 
-      console.debug("syncResumeReceiver", msg);
+      console.debug('syncResumeReceiver', msg);
       resetState({
         isSynchronizingResume: false,
         isSynchronized: true,
@@ -502,10 +502,10 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     const listener = (msg: any) => {
       if (!isISyncResumeStartMessage(msg)) return;
 
-      console.info("syncResumeStartReceiver: ", msg);
+      console.info('syncResumeStartReceiver: ', msg);
       resetState(true, { requestId: msg.requestId });
 
-      if (msg.payload.type !== "other") {
+      if (msg.payload.type !== 'other') {
         bindClickToMask(msg.payload.type, msg.payload.baseConfig);
         bindClickToCloseButton(msg.payload.type, msg.payload.baseConfig);
       }
@@ -531,7 +531,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLButtonElement;
-      if (target.getAttribute("id") === "ignoreSync") {
+      if (target.getAttribute('id') === 'ignoreSync') {
         resetState({ isActive: false });
         return;
       }
@@ -551,13 +551,13 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
     // 监听环境变量变化
     const envSubscription = env$
-      .pipe(filter((env) => !!env))
+      .pipe(filter(env => !!env))
       .subscribe((env: string | undefined) => {
         if (env) resetState({ env });
       });
 
     // 监听等待状态变化
-    const waitSubscription = wait$.subscribe((waitState) => {
+    const waitSubscription = wait$.subscribe(waitState => {
       if (waitState) resetState({ wait: waitState.isSyncWait });
     });
 
@@ -575,7 +575,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
   // 如果组件未激活，不渲染
   if (!state.isActive) {
-    console.log("未激活", state.isActive);
+    console.log('未激活', state.isActive);
     return null;
   }
 
@@ -593,12 +593,12 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       <div
         ref={dragRef}
         className={`mesoor-extension-root mesoor-extension-container mesoor-transition ${
-          state.isDragging ? "dragging" : ""
-        } ${className || ""}`}
+          state.isDragging ? 'dragging' : ''
+        } ${className || ''}`}
       >
         <div
           className={`mesoor-card drag-handle ${
-            state.isDragging ? "dragging" : ""
+            state.isDragging ? 'dragging' : ''
           }`}
           onClick={handleClick}
           onMouseDown={handleMouseDown}
@@ -616,7 +616,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
               <div className="mesoor-buttons">
                 <button
                   className="mesoor-button mesoor-button-primary"
-                  onClick={(e) => {
+                  onClick={e => {
                     e.stopPropagation();
                     confirmSync();
                   }}
@@ -626,7 +626,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
                 <button
                   id="ignoreSync"
                   className="mesoor-button mesoor-button-ghost"
-                  onClick={(e) => {
+                  onClick={e => {
                     e.stopPropagation();
                     resetState({ isActive: false });
                   }}
