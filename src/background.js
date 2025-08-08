@@ -1873,7 +1873,7 @@ const lagouOrderResume$ = lagouResumeReplay$.pipe(
     let fileContentB64 = null;
     // 创建一个PDF文档
     const pdf = new jsPDF();
-    let fileResp_headers = {}
+    let fileResp_headers = {};
     // 简历页面的附件
     const resumeId = data?.content?.briefInfo?.id;
     if (resumeId) {
