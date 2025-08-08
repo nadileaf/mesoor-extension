@@ -231,9 +231,9 @@ const maimaiResume$ = RequestListen.install([
 // 拉勾招聘页面中简历管理页面的简历手抓
 const lagouResume$ = RequestListen.install([
   // 招人-搜索-2025-07-08
-  '*://gate.lagou.com/v1/zhaopin/orderResumes/detail*',
+  // '*://gate.lagou.com/v1/zhaopin/orderResumes/detail*',
   // 沟通页面的JSON监听-2025-07-08
-  '*://easy.lagou.com/search/resume/fetchResume.json*',
+  // '*://easy.lagou.com/search/resume/fetchResume.json*',
 ]);
 installDeclarativeNet(apiConfig);
 
@@ -1873,6 +1873,7 @@ const lagouOrderResume$ = lagouResumeReplay$.pipe(
     let fileContentB64 = null;
     // 创建一个PDF文档
     const pdf = new jsPDF();
+    let fileResp_headers = {}
     // 简历页面的附件
     const resumeId = data?.content?.briefInfo?.id;
     if (resumeId) {
@@ -1886,6 +1887,7 @@ const lagouOrderResume$ = lagouResumeReplay$.pipe(
         for (let index = 0; index < maxPage; index++) {
           const getAttachmentUrl = `https://easy.lagou.com/resume/${resumeId}/page_image_${index}.pnga?preview=2`;
           const fileResp = await request(getAttachmentUrl);
+          fileResp_headers = fileResp.headers;
           const blob = await fileResp.blob();
           imageBlobs.push(blob);
         }
@@ -1936,7 +1938,7 @@ const lagouOrderResume$ = lagouResumeReplay$.pipe(
             {
               fileContentB64: fileContentB64,
               type: 'resumeAttachment',
-              responseHeaders: fileResp.headers,
+              responseHeaders: fileResp_headers,
             },
           ]
         : null,
