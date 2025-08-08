@@ -229,12 +229,12 @@ const maimaiResume$ = RequestListen.install([
 ]);
 
 // 拉勾招聘页面中简历管理页面的简历手抓
-const lagouResume$ = RequestListen.install([
-  // 招人-搜索-2025-07-08
-  // '*://gate.lagou.com/v1/zhaopin/orderResumes/detail*',
-  // 沟通页面的JSON监听-2025-07-08
-  // '*://easy.lagou.com/search/resume/fetchResume.json*',
-]);
+// const lagouResume$ = RequestListen.install([
+//   // 招人-搜索-2025-07-08
+//   '*://gate.lagou.com/v1/zhaopin/orderResumes/detail*',
+//   // 沟通页面的JSON监听-2025-07-08
+//   '*://easy.lagou.com/search/resume/fetchResume.json*',
+// ]);
 installDeclarativeNet(apiConfig);
 
 async function getTokenFromTip() {
@@ -1600,128 +1600,6 @@ async function injectButton2dify(url, tabId, config) {
 }
 
 connectWebSocket();
-// 前程无忧
-// 人才管理-HTML解析
-// 人才望远镜-HTML解析
-// 人才搜索—HTML解析
-// 人才库-HTML解析
-// 人才沟通-request
-
-// 定义匹配的 URL 模式正则数组
-const urlPatterns = [
-  // 猎聘诚猎通
-  /h\.liepin\.com\/resume\/showresumedetail/,
-  // 前程无忧
-  // 人才管理 人才望远镜 人才搜索 人才库
-  /ehire\.51job\.com\/Revision\/talent\/resume\/detail/,
-  // 领英
-  // 个人首页
-  /linkedin\.com\/in\//,
-  // 企业招聘账户搜索
-  /linkedin\.com\/talent\/hire\/\d+\/discover\/recruiterSearch\/profile\//,
-  // 人才推荐
-  /linkedin\.com\/talent\/hire\/\d+\/discover\/automatedSourcing\/review\/profile\//,
-  // 备选人才
-  /linkedin\.com\/talent\/hire\/\d+\/manage\/all\/profile\//,
-  // 备选人才各个阶段
-  /linkedin\.com\/talent\/hire\/\d+\/manage\/\d+\/profile\//,
-  // 脉脉
-  /www\.maimai\.cn\/profile\/detail\//,
-  //
-];
-
-// 检查 URL 是否匹配任一模式
-function isUrlMatched(url) {
-  if (!url) return false;
-  console.log('检查URL是否匹配:', url);
-  return urlPatterns.some(pattern => pattern.test(url));
-}
-
-// 直接使用浏览器 API 监听 tab 更新事件
-console.log('开始设置 tab 更新监听器...');
-
-// browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-//     console.log('Tab 更新事件触发:', { tabId, changeInfo, url: tab.url })
-//     // 只处理页面加载完成的事件
-//     if (changeInfo.status === 'complete' && tab.url) {
-//         console.log('页面加载完成:', tab.url);
-//         console.log('Tab:', tab);
-
-//         // 检查 URL 是否匹配
-//         if (isUrlMatched(tab.url)) {
-//             console.log('URL 匹配成功，准备发送消息:', tab.url);
-
-//             // 获取当前 token
-//             const currentToken = tokenSubject.getValue();
-
-//             // 如果没有 token，不执行后续操作
-//             if (!currentToken) {
-//                 console.warn('没有有效的 token，不执行 HTML 获取和 API 发送操作');
-//                 return;
-//             }
-
-//             // 发送消息到 content script
-//             browser.tabs.sendMessage(tabId, {
-//                 type: MessageType.RECEIVE_HTML // 使用正确的消息类型
-//             }).then(response => {
-//                 console.log(`成功向 tab ${tabId} 发送消息，响应:`, response);
-
-//                 // 处理返回的 HTML 内容
-//                 if (response && response.html) {
-//                     console.log(`成功获取 HTML 内容，长度: ${response.html.length}`);
-//                     // 发送 HTML 内容到接口
-//                     fetch('http://localhost:8080/parser/auto', {
-//                         method: 'POST',
-//                         headers: {
-//                             'Content-Type': 'application/json',
-//                             'Authorization': `Bearer ${currentToken}`
-//                         },
-//                         body: JSON.stringify({
-//                             html: response.html,
-//                             url: tab.url,
-//                             title: tab.title,
-//                             tabId: tabId,
-//                         })
-//                     })
-//                     .then(apiResponse => apiResponse.json())
-//                     .then(data => {
-//                         console.log('API 响应成功:', data);
-//                     })
-//                     .catch(error => {
-//                         console.error('发送 HTML 到 API 失败:', error);
-//                     });
-
-//                     // 这里可以进一步处理 HTML 内容
-//                     console.log(`成功获取 HTML 内容，内容: ${response.html}`);
-//                 } else {
-//                     console.warn(`没有收到 HTML 内容或内容为空`);
-//                 }
-//             }).catch(error => {
-//                 console.error(`向 tab ${tabId} 发送消息失败:`, error);
-//             });
-//         }
-//     }
-// });
-
-// const cacheHeaders$ = RequestListen.installOnBeforeSendHeaders([
-//     '*://api-rcn.duolie.com/api/com.liepin.rcnresume.get-resume-detail*',
-//   ])
-
-// cacheHeaders$
-// .pipe(
-// withLatestFrom(user$),
-// filter(([details]) => details.tabId !== -1 && details.method !== 'OPTIONS'),
-// )
-// .subscribe(async ([details]) => {
-//     logger.debug('cacheHeaders details', details)
-//     requestsHeaderMap.set(details.requestId, {
-//     url: details.url,
-//     method: details.method,
-//     timeStamp: details.timeStamp,
-//     headers: details.requestHeaders,
-//     });
-// },
-// )
 
 // 简历收录部分
 
@@ -1780,177 +1658,177 @@ const maimaiResumeLast$ = maimaiResume$.pipe(
   retry()
 );
 
-const lagouResumeReplay$ = lagouResume$.pipe(
-  filter(details => details.tabId !== -1),
-  tap(details => {
-    console.log('lagouResume details', details);
-  }),
-  mergeMap(async details => {
-    const requestId = uuid();
-    // 不加这个就被判断非法访问
-    const add_headers = { 'X-L-REQ-HEADER': '{"deviceType":1}' };
-    const resp = await request(details.url, { headers: add_headers });
-    const data = await resp.json();
-    return {
-      details,
-      data,
-      requestId,
-    };
-  }),
-  tap(({ details }) => {
-    console.log('lagouResumeReplay details', details);
-  }),
-  catchError(error => {
-    console.error('lagouResumeReplay错误:', error);
-    return of();
-  }),
-  retry(),
-  share()
-);
+// const lagouResumeReplay$ = lagouResume$.pipe(
+//   filter(details => details.tabId !== -1),
+//   tap(details => {
+//     console.log('lagouResume details', details);
+//   }),
+//   mergeMap(async details => {
+//     const requestId = uuid();
+//     // 不加这个就被判断非法访问
+//     const add_headers = { 'X-L-REQ-HEADER': '{"deviceType":1}' };
+//     const resp = await request(details.url, { headers: add_headers });
+//     const data = await resp.json();
+//     return {
+//       details,
+//       data,
+//       requestId,
+//     };
+//   }),
+//   tap(({ details }) => {
+//     console.log('lagouResumeReplay details', details);
+//   }),
+//   catchError(error => {
+//     console.error('lagouResumeReplay错误:', error);
+//     return of();
+//   }),
+//   retry(),
+//   share()
+// );
 
-const lagouCommunicationLastResume$ = lagouResumeReplay$.pipe(
-  filter(({ details }) => details.url.includes('fetchResume.json')),
-  mergeMap(async ({ details, data }) => {
-    let fileContentB64 = null;
-    const attachmentResumeId = findValueByKey(data, 'attachmentResumeId');
-    if (attachmentResumeId) {
-      const resumeFetchUrl = `https://easy.lagou.com/pub/pc/nearbyPreview.json?attachmentResumeId=${attachmentResumeId}`;
-      const fileResp = await request(resumeFetchUrl);
+// const lagouCommunicationLastResume$ = lagouResumeReplay$.pipe(
+//   filter(({ details }) => details.url.includes('fetchResume.json')),
+//   mergeMap(async ({ details, data }) => {
+//     let fileContentB64 = null;
+//     const attachmentResumeId = findValueByKey(data, 'attachmentResumeId');
+//     if (attachmentResumeId) {
+//       const resumeFetchUrl = `https://easy.lagou.com/pub/pc/nearbyPreview.json?attachmentResumeId=${attachmentResumeId}`;
+//       const fileResp = await request(resumeFetchUrl);
 
-      // 检查响应头，如果没有content-disposition，说明附件不存在
-      const contentDisposition = fileResp.headers.get('content-disposition');
-      if (!contentDisposition) {
-        console.log(
-          `附件不存在，缺少content-disposition响应头: ${resumeFetchUrl}`
-        );
-        fileContentB64 = null;
-      } else {
-        const blob = await fileResp.blob();
-        fileContentB64 = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.readAsDataURL(blob);
-          reader.onloadend = () => {
-            if (typeof reader.result === 'string') {
-              resolve(reader.result.split(',')[1]);
-            } else {
-              resolve('');
-            }
-          };
-        });
-      }
-    }
-    const body = {
-      jsonBody: data,
-      url: details.url,
-      fileContentB64: fileContentB64
-        ? [
-            {
-              fileContentB64: fileContentB64,
-              type: 'resumeAttachment',
-              responseHeaders: fileResp.headers,
-            },
-          ]
-        : null,
-    };
-    return {
-      details,
-      body,
-    };
-  }),
-  catchError(error => {
-    console.error('lagouCommunicationLastResume$错误:', error);
-    return of();
-  }),
-  retry()
-);
+//       // 检查响应头，如果没有content-disposition，说明附件不存在
+//       const contentDisposition = fileResp.headers.get('content-disposition');
+//       if (!contentDisposition) {
+//         console.log(
+//           `附件不存在，缺少content-disposition响应头: ${resumeFetchUrl}`
+//         );
+//         fileContentB64 = null;
+//       } else {
+//         const blob = await fileResp.blob();
+//         fileContentB64 = await new Promise(resolve => {
+//           const reader = new FileReader();
+//           reader.readAsDataURL(blob);
+//           reader.onloadend = () => {
+//             if (typeof reader.result === 'string') {
+//               resolve(reader.result.split(',')[1]);
+//             } else {
+//               resolve('');
+//             }
+//           };
+//         });
+//       }
+//     }
+//     const body = {
+//       jsonBody: data,
+//       url: details.url,
+//       fileContentB64: fileContentB64
+//         ? [
+//             {
+//               fileContentB64: fileContentB64,
+//               type: 'resumeAttachment',
+//               responseHeaders: fileResp.headers,
+//             },
+//           ]
+//         : null,
+//     };
+//     return {
+//       details,
+//       body,
+//     };
+//   }),
+//   catchError(error => {
+//     console.error('lagouCommunicationLastResume$错误:', error);
+//     return of();
+//   }),
+//   retry()
+// );
 
 // 招人、简历库简历流
-const lagouOrderResume$ = lagouResumeReplay$.pipe(
-  filter(({ details }) =>
-    details.url.includes('gate.lagou.com/v1/zhaopin/orderResumes/detail')
-  ),
-  mergeMap(async ({ details, data }) => {
-    let fileContentB64 = null;
-    // 创建一个PDF文档
-    const pdf = new jsPDF();
-    let fileResp_headers = {};
-    // 简历页面的附件
-    const resumeId = data?.content?.briefInfo?.id;
-    if (resumeId) {
-      const getAttachmentIndexUrl = `https://easy.lagou.com/resume/preview_info.json?resumeId=${resumeId}`;
-      const fileRespIndexResponse = await request(getAttachmentIndexUrl);
-      const attachmentIndex = await fileRespIndexResponse.json();
-      const maxPage =
-        attachmentIndex?.content?.data?.showTabs?.nearby?.pageCount;
-      if (maxPage) {
-        const imageBlobs = [];
-        for (let index = 0; index < maxPage; index++) {
-          const getAttachmentUrl = `https://easy.lagou.com/resume/${resumeId}/page_image_${index}.pnga?preview=2`;
-          const fileResp = await request(getAttachmentUrl);
-          fileResp_headers = fileResp.headers;
-          const blob = await fileResp.blob();
-          imageBlobs.push(blob);
-        }
-        for (let i = 0; i < imageBlobs.length; i++) {
-          const blob = imageBlobs[i];
-          const imgData = await new Promise(resolve => {
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => {
-              if (typeof reader.result === 'string') {
-                resolve(reader.result);
-              } else {
-                resolve('');
-              }
-            };
-          });
-          if (i > 0) {
-            pdf.addPage();
-          }
-          const imgDataClean = imgData.split(',')[1];
-          if (imgDataClean) {
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = imgProps.width;
-            const imgHeight = imgProps.height;
+// const lagouOrderResume$ = lagouResumeReplay$.pipe(
+//   filter(({ details }) =>
+//     details.url.includes('gate.lagou.com/v1/zhaopin/orderResumes/detail')
+//   ),
+//   mergeMap(async ({ details, data }) => {
+//     let fileContentB64 = null;
+//     // 创建一个PDF文档
+//     const pdf = new jsPDF();
+//     let fileResp_headers = {}
+//     // 简历页面的附件
+//     const resumeId = data?.content?.briefInfo?.id;
+//     if (resumeId) {
+//       const getAttachmentIndexUrl = `https://easy.lagou.com/resume/preview_info.json?resumeId=${resumeId}`;
+//       const fileRespIndexResponse = await request(getAttachmentIndexUrl);
+//       const attachmentIndex = await fileRespIndexResponse.json();
+//       const maxPage =
+//         attachmentIndex?.content?.data?.showTabs?.nearby?.pageCount;
+//       if (maxPage) {
+//         const imageBlobs = [];
+//         for (let index = 0; index < maxPage; index++) {
+//           const getAttachmentUrl = `https://easy.lagou.com/resume/${resumeId}/page_image_${index}.pnga?preview=2`;
+//           const fileResp = await request(getAttachmentUrl);
+//           fileResp_headers = fileResp.headers;
+//           const blob = await fileResp.blob();
+//           imageBlobs.push(blob);
+//         }
+//         for (let i = 0; i < imageBlobs.length; i++) {
+//           const blob = imageBlobs[i];
+//           const imgData = await new Promise(resolve => {
+//             const reader = new FileReader();
+//             reader.readAsDataURL(blob);
+//             reader.onloadend = () => {
+//               if (typeof reader.result === 'string') {
+//                 resolve(reader.result);
+//               } else {
+//                 resolve('');
+//               }
+//             };
+//           });
+//           if (i > 0) {
+//             pdf.addPage();
+//           }
+//           const imgDataClean = imgData.split(',')[1];
+//           if (imgDataClean) {
+//             const imgProps = pdf.getImageProperties(imgData);
+//             const pdfWidth = pdf.internal.pageSize.getWidth();
+//             const pdfHeight = pdf.internal.pageSize.getHeight();
+//             const imgWidth = imgProps.width;
+//             const imgHeight = imgProps.height;
 
-            // 计算缩放比例，使图片适应页面
-            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-            const scaledWidth = imgWidth * ratio;
-            const scaledHeight = imgHeight * ratio;
+//             // 计算缩放比例，使图片适应页面
+//             const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+//             const scaledWidth = imgWidth * ratio;
+//             const scaledHeight = imgHeight * ratio;
 
-            // 居中图片
-            const x = (pdfWidth - scaledWidth) / 2;
-            const y = (pdfHeight - scaledHeight) / 2;
+//             // 居中图片
+//             const x = (pdfWidth - scaledWidth) / 2;
+//             const y = (pdfHeight - scaledHeight) / 2;
 
-            pdf.addImage(imgData, 'PNG', x, y, scaledWidth, scaledHeight);
-          }
-        }
-        fileContentB64 = pdf.output('datauristring').split(',')[1];
-      }
-    }
-    const body = {
-      jsonBody: data,
-      url: details.url,
-      fileContentB64: fileContentB64
-        ? [
-            {
-              fileContentB64: fileContentB64,
-              type: 'resumeAttachment',
-              responseHeaders: fileResp_headers,
-            },
-          ]
-        : null,
-    };
-    return { details, body };
-  }),
-  catchError(error => {
-    console.error('lagouOrderResume$错误:', error);
-    return of();
-  }),
-  retry()
-);
+//             pdf.addImage(imgData, 'PNG', x, y, scaledWidth, scaledHeight);
+//           }
+//         }
+//         fileContentB64 = pdf.output('datauristring').split(',')[1];
+//       }
+//     }
+//     const body = {
+//       jsonBody: data,
+//       url: details.url,
+//       fileContentB64: fileContentB64
+//         ? [
+//             {
+//               fileContentB64: fileContentB64,
+//               type: 'resumeAttachment',
+//               responseHeaders: fileResp_headers,
+//             },
+//           ]
+//         : null,
+//     };
+//     return { details, body };
+//   }),
+//   catchError(error => {
+//     console.error('lagouOrderResume$错误:', error);
+//     return of();
+//   }),
+//   retry()
+// );
 
 // 以下请求会缓存header 不含预检请求
 const cacheHeaders$ =
@@ -2293,9 +2171,9 @@ const mergedResume$ = merge(
   // 领英: 简历流 json含联系方式
   linkedInContactResume$,
   // 拉勾: 招人、简历库简历流 含附件
-  lagouOrderResume$,
+  // lagouOrderResume$,
   // 拉勾: 沟通页面简历流 含附件
-  lagouCommunicationLastResume$,
+  // lagouCommunicationLastResume$,
   // 智联: 简历流 含附件
   zhilianAttachmentResume$,
   // 脉脉: 简历流 含附件
