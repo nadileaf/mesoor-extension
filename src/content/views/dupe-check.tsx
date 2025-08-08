@@ -69,6 +69,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     // 判断是否在支持的网站上激活
     const isActive = !(
       location.href.includes('easy.lagou.com') ||
+      location.href.includes('passport.lagou.com') ||
       location.href.includes('hr.shixiseng.com') ||
       location.href.includes('linkedin.com') ||
       location.href.includes('zhipin.com') ||
@@ -76,6 +77,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       (location.href.includes('rd6.zhaopin.com') &&
         !location.href.includes('rd6.zhaopin.com/resume/detail')) ||
       location.href.includes('58.com') ||
+      location.href.includes('attachment.zhaopin.com') ||
       location.href.includes('linkedin.cn') ||
       location.href.includes('51job.com') ||
       //   location.href.includes("51job.com/Revision/online/chat")) ||

@@ -1,5 +1,14 @@
 import { jsPDF } from 'jspdf';
-import { BehaviorSubject, EMPTY, from, merge, of } from 'rxjs';
+import {
+  BehaviorSubject,
+  EMPTY,
+  from,
+  merge,
+  of,
+  catchError,
+  retry,
+  throwError,
+} from 'rxjs';
 import {
   debounceTime,
   distinctUntilChanged,
@@ -1763,7 +1772,12 @@ const maimaiResumeLast$ = maimaiResume$.pipe(
       details,
       body,
     };
-  })
+  }),
+  catchError(error => {
+    console.error('lagouResume错误:', error);
+    return of();
+  }),
+  retry()
 );
 
 const lagouResumeReplay$ = lagouResume$.pipe(
@@ -1786,6 +1800,11 @@ const lagouResumeReplay$ = lagouResume$.pipe(
   tap(({ details }) => {
     console.log('lagouResumeReplay details', details);
   }),
+  catchError(error => {
+    console.error('lagouResumeReplay错误:', error);
+    return of();
+  }),
+  retry(),
   share()
 );
 
@@ -1837,7 +1856,12 @@ const lagouCommunicationLastResume$ = lagouResumeReplay$.pipe(
       details,
       body,
     };
-  })
+  }),
+  catchError(error => {
+    console.error('lagouCommunicationLastResume$错误:', error);
+    return of();
+  }),
+  retry()
 );
 
 // 招人、简历库简历流
@@ -1918,7 +1942,12 @@ const lagouOrderResume$ = lagouResumeReplay$.pipe(
         : null,
     };
     return { details, body };
-  })
+  }),
+  catchError(error => {
+    console.error('lagouOrderResume$错误:', error);
+    return of();
+  }),
+  retry()
 );
 
 // 以下请求会缓存header 不含预检请求
@@ -1929,7 +1958,12 @@ cacheHeaders$
     filter(details => details.tabId !== -1 && details.method !== 'OPTIONS'),
     tap(details => {
       console.log('step 1 cacheHeaders details', details);
-    })
+    }),
+    catchError(error => {
+      console.error('cacheHeaders错误:', error);
+      return of();
+    }),
+    retry()
   )
   .subscribe(async details => {
     requestsHeaderMap.set(details.requestId, {
@@ -1949,7 +1983,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   }),
   mergeMap(async details => {
     // 必须的延迟，否则会出错
-    await delay(2000);
+    await delay(1500);
     const originalHeaders =
       requestsHeaderMap.get(details.requestId)?.headers ?? {};
     if (!originalHeaders) {
@@ -2027,6 +2061,11 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   tap(result => {
     console.log('重放器执行重放完成', result);
   }),
+  catchError(error => {
+    console.error('resumeSendHeadersV2Base错误:', error);
+    return of();
+  }),
+  retry(),
   share()
 );
 
@@ -2107,7 +2146,12 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
         body,
       };
     }
-  })
+  }),
+  catchError(error => {
+    console.error('zhilianAttachmentResume错误:', error);
+    return of();
+  }),
+  retry()
 );
 const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
   tap(({ details }) => {
@@ -2128,7 +2172,12 @@ const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
     };
     const headers = {};
     return { details, headers, body };
-  })
+  }),
+  catchError(error => {
+    console.error('resumeSendHeadersV2BaseSub错误:', error);
+    return of();
+  }),
+  retry()
 );
 
 // 领英企业账户搜索页-获取联系方式
@@ -2203,7 +2252,12 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
       fileContentB64: [],
     };
     return { details, headers, body };
-  })
+  }),
+  catchError(error => {
+    console.error('领英获取联系方式错误:', error);
+    return of();
+  }),
+  retry()
 );
 
 const htmlSync$ = message$.pipe(
@@ -2224,7 +2278,12 @@ const htmlSync$ = message$.pipe(
     const body = {};
 
     return { details, headers, body };
-  })
+  }),
+  catchError(error => {
+    console.error('HTML获取错误:', error);
+    return of();
+  }),
+  retry()
 );
 
 // 简历流聚合
@@ -2361,6 +2420,11 @@ mergedResume$
         browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
       }
     }),
+    catchError(error => {
+      console.error('syncResumeFeedbackMsg错误:', error);
+      return of();
+    }),
+    retry(),
     share()
   )
   .subscribe();
