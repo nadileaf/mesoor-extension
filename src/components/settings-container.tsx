@@ -125,7 +125,7 @@ const SettingsContainer: React.FC = () => {
 
         if (result) {
           setSettings({
-            autoSync: !result.wait?.isSyncWait || false,
+            autoSync: !result.wait?.isSyncWait,
           });
         }
       } catch (error) {
@@ -140,11 +140,14 @@ const SettingsContainer: React.FC = () => {
 
   // 保存设置
   const saveSettings = async (newSettings: SettingsState) => {
+    const isSyncWait = !newSettings.autoSync;
     try {
       await (window as any).browser?.storage?.sync?.set({
-        wait: { isSyncWait: newSettings.autoSync },
+        wait: { isSyncWait },
       });
       setSettings(newSettings);
+      const wait = await (window as any).browser?.storage?.sync?.get(['wait']);
+      console.log('wait', wait);
     } catch (error) {
       console.error('Failed to save settings:', error);
     }
