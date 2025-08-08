@@ -2119,7 +2119,7 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
         },
       });
       const contactInfoData = await contactInfoResponse.json();
-      const contactInfo = contactInfoData?.data?.contactInfo || {};
+      const contactInfo = contactInfoData?.contactInfo || {};
       console.log('获取到领英联系方式:', contactInfo);
       data = { ...replayResponse, ...contactInfo };
     } catch (error) {

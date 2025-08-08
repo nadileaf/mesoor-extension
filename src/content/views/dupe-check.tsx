@@ -86,7 +86,8 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       location.href.includes('duolie.com') ||
       // 猎聘诚猎通沟通列表页面
       (location.href.includes('h.liepin.com') &&
-        location.href.includes('h.liepin.com/im/showmsgnewpage'))
+        (location.href.includes('h.liepin.com/im/showmsgnewpage') ||
+          location.href.includes('h.liepin.com/resume/showresumedetail')))
     );
 
     // const isActive = true;
