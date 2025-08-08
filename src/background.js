@@ -2264,7 +2264,9 @@ mergedResume$
           type: 'other',
         },
       };
-      Promise.resolve(browser.tabs.sendMessage(details.tabId, syncResumeStartMessage));
+      Promise.resolve(
+        browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
+      );
       return of({ data, user, requestId }).pipe();
     }),
     mergeMap(async ({ data, user, requestId }) => {
@@ -2364,9 +2366,8 @@ mergedResume$
   .subscribe();
 
 message$
-  .pipe(filter(isConfirmSynchronizationMessage), 
-  withLatestFrom(user$))
-  .subscribe(async ([{message,sender}, user]) => {
+  .pipe(filter(isConfirmSynchronizationMessage), withLatestFrom(user$))
+  .subscribe(async ([{ message, sender }, user]) => {
     console.log('isConfirmSynchronizationMessage recieved: ', message);
     const tabId = message.requestId || sender.tab.id;
     console.log('isConfirmSynchronizationMessage tabId', tabId);
