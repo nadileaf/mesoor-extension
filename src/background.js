@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { BehaviorSubject, EMPTY, from, merge } from 'rxjs';
+import { BehaviorSubject, EMPTY, from, merge, of } from 'rxjs';
 import {
   debounceTime,
   distinctUntilChanged,
@@ -2264,15 +2264,10 @@ mergedResume$
           type: 'other',
         },
       };
-      // 返回一个 Observable，确保 mergeMap 有正确的返回值
-      return from(
-        browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
-      ).pipe(
-        map(() => ({ data, user })) // 保持原始数据流向下一个操作符
-      );
+      Promise.resolve(browser.tabs.sendMessage(details.tabId, syncResumeStartMessage));
+      return of({ data, user, requestId }).pipe();
     }),
-    mergeMap(async ({ data, user }) => {
-      const requestId = uuid();
+    mergeMap(async ({ data, user, requestId }) => {
       // 等待用户确认
       const confirmed = await waitForSyncMessage(
         data.details.tabId,
@@ -2284,9 +2279,10 @@ mergedResume$
       return { data, user, confirmed };
     }),
     filter(({ confirmed }) => confirmed),
-    mergeMap(async ({ data, user }) => {
+    mergeMap(async ({ data, user, requestId }) => {
       const syncResumeFeedbackMsg = {
-        requestId: uuid(),
+        tabId: data.details.tabId,
+        requestId: requestId,
         type: 'sync-resume-feedback',
         payload: {
           isSyncResumeError: false,
@@ -2359,6 +2355,7 @@ mergedResume$
         console.error('简历同步过程中出错:', error);
         syncResumeFeedbackMsg.payload.isSyncResumeError = true;
       } finally {
+        console.log('syncResumeFeedbackMsg', syncResumeFeedbackMsg);
         browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
       }
     }),
@@ -2367,9 +2364,11 @@ mergedResume$
   .subscribe();
 
 message$
-  .pipe(filter(isConfirmSynchronizationMessage), withLatestFrom(user$))
-  .subscribe(async ([message]) => {
+  .pipe(filter(isConfirmSynchronizationMessage), 
+  withLatestFrom(user$))
+  .subscribe(async ([{message,sender}, user]) => {
     console.log('isConfirmSynchronizationMessage recieved: ', message);
-    const tabId = message.message.requestId || message.sender.tab.id;
+    const tabId = message.requestId || sender.tab.id;
+    console.log('isConfirmSynchronizationMessage tabId', tabId);
     tabsObject[tabId] = 1;
   });
