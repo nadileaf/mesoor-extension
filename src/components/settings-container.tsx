@@ -23,6 +23,7 @@ declare global {
 
 interface SettingsState {
   autoSync: boolean;
+  enableSocketConnection: boolean;
 }
 
 interface VersionInfo {
@@ -91,6 +92,7 @@ function compareVersions(
 const SettingsContainer: React.FC = () => {
   const [settings, setSettings] = useState<SettingsState>({
     autoSync: false,
+    enableSocketConnection: true,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [latestVersion, setLatestVersion] = useState<VersionInfo | null>(null);
@@ -121,11 +123,13 @@ const SettingsContainer: React.FC = () => {
       try {
         const result = await (window as any).browser?.storage?.sync?.get([
           'wait',
+          'enableSocketConnection',
         ]);
 
         if (result) {
           setSettings({
             autoSync: !result.wait?.isSyncWait,
+            enableSocketConnection: result.enableSocketConnection ?? true,
           });
         }
       } catch (error) {
@@ -144,6 +148,7 @@ const SettingsContainer: React.FC = () => {
     try {
       await (window as any).browser?.storage?.sync?.set({
         wait: { isSyncWait },
+        enableSocketConnection: newSettings.enableSocketConnection,
       });
       setSettings(newSettings);
       const wait = await (window as any).browser?.storage?.sync?.get(['wait']);
@@ -303,6 +308,22 @@ const SettingsContainer: React.FC = () => {
               <Switch
                 checked={settings.autoSync}
                 onCheckedChange={() => handleToggle('autoSync')}
+              />
+            </div>
+
+            {/* 后端通信开关 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-base font-medium text-foreground">
+                  后端通信
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  启用与后端服务器的数据通信功能
+                </div>
+              </div>
+              <Switch
+                checked={settings.enableSocketConnection}
+                onCheckedChange={() => handleToggle('enableSocketConnection')}
               />
             </div>
 
