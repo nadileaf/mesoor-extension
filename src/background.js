@@ -60,6 +60,7 @@ const spaceServer = import.meta.env.VITE_SPACE_SERVER;
 const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
 const enableSocketConnection =
   import.meta.env.VITE_ENABLE_SOCKET_CONNECTION === 'true';
+const defaultEnv = import.meta.env.VITE_DOMAIN_HOST;
 // 输出环境变量日志
 console.log('环境变量加载配置:', import.meta.env);
 console.log('环境变量生效配置:', {
@@ -95,7 +96,7 @@ browser.runtime.onInstalled.addListener(async detail => {
     // isSyncWait 为 true 是用户手动同步
     await browser.storage.sync.set({ wait: { isSyncWait: false } });
   }
-  const defaultEnv = 'tip-test.nadileaf.com';
+
   await browser.storage.local.set({ env: defaultEnv, activities: {} });
   console.log('on install setting success...');
 });

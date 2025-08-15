@@ -26,7 +26,13 @@ function shouldProcessThisUrl(url: string): boolean {
 
 console.log('sync-html: done');
 async function run() {
-  await delay(2000); // 抓取的时候页面可能没有完全加载完，所以等待一段时间再抓取
+  if (location.href.includes('linkedin.com/in')) {
+    await delay(5000);
+    console.log('抓取 LinkedIn 简历');
+  } else {
+    await delay(2000); // 抓取的时候页面可能没有完全加载完，所以等待一段时间再抓取
+    console.log('抓取其他简历');
+  }
   const html = await processHTML();
   const msg: IViewResumeMessage = {
     requestId: uuid(),
