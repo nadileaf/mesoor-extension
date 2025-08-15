@@ -123,13 +123,13 @@ const SettingsContainer: React.FC = () => {
       try {
         const result = await (window as any).browser?.storage?.sync?.get([
           'wait',
-          'enableSocketConnection',
+          'preferences',
         ]);
 
         if (result) {
           setSettings({
             autoSync: !result.wait?.isSyncWait,
-            enableSocketConnection: result.enableSocketConnection ?? true,
+            enableSocketConnection: !result.preferences?.disabled,
           });
         }
       } catch (error) {
@@ -145,14 +145,17 @@ const SettingsContainer: React.FC = () => {
   // 保存设置
   const saveSettings = async (newSettings: SettingsState) => {
     const isSyncWait = !newSettings.autoSync;
+    const preferences = { disabled: !newSettings.enableSocketConnection };
     try {
+      // 更新preferences中的disabled属性
       await (window as any).browser?.storage?.sync?.set({
         wait: { isSyncWait },
-        enableSocketConnection: newSettings.enableSocketConnection,
+        preferences: preferences,
       });
       setSettings(newSettings);
       const wait = await (window as any).browser?.storage?.sync?.get(['wait']);
       console.log('wait', wait);
+      console.log('设置已保存', preferences);
     } catch (error) {
       console.error('Failed to save settings:', error);
     }

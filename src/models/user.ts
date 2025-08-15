@@ -42,7 +42,8 @@ export const env$ = concat(fromStorage$, envChange$).pipe(shareReplay(1));
 // 如果想要修改这个，加一个新流和一个新的storage，在cookiechange的时候查询所有相关cookie，少了一个就设置这个storage，同时socket$流combineLast里面多加入一个流即可。
 export const user$ = env$.pipe(
   switchMap(env => {
-    const domain = getDomain(env!);
+    // const domain = getDomain(env!);
+    const domain = getDomain(import.meta.env.VITE_TOKEN_HOST);
     const getCookies = browser.cookies.getAll({ domain });
     return concat(from(getCookies).pipe(concatAll()), onCookiesChange$(domain));
   }),

@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { installHistoryListener } from './utils/history-listen';
 import {
   BehaviorSubject,
   EMPTY,
@@ -8,6 +9,9 @@ import {
   catchError,
   retry,
   throwError,
+  combineLatest,
+  concat,
+  Observable,
 } from 'rxjs';
 import {
   debounceTime,
@@ -19,6 +23,7 @@ import {
   switchMap,
   tap,
   withLatestFrom,
+  shareReplay,
 } from 'rxjs/operators';
 import { v4 as uuid } from 'uuid';
 import browser from 'webextension-polyfill';
@@ -30,45 +35,40 @@ import {
 // 导入user流
 import { user$ } from './models/user.ts';
 // import { env$ } from "./models/user.ts";
-import { wait$ } from './models/preference.ts';
+import { wait$, preferences$ } from './models/preference.ts';
 import { message$ } from './models/stream.ts';
 import { delay } from './utils/index.ts';
 import { findValueByKey } from './utils/json-utils.ts';
 import * as RequestListen from './utils/request-listen.ts';
 import { request } from './utils/request.ts';
 import { installDeclarativeNet } from './utils/with-credentials.ts';
-
 import {
   isConfirmSynchronizationMessage,
   isSyncHtmlMessage,
 } from './utils/message-fileter.ts';
+import * as qs from 'qs';
 
 // 直接定义消息类型常量
 const MessageType = {
   RECEIVE_HTML: 'receive_html',
 };
-const WS_SERVER =
-  import.meta.env.VITE_WS_SERVER || 'ws://web-extension-use.nadileaf.com';
-
-let difyUserName = 'extension-button';
-const BACKGROUND_SERVER_HOST =
-  import.meta.env.VITE_BACKGROUND_SERVER_HOST ||
-  'https://web-extension-use.nadileaf.com';
-const Token_Host =
-  import.meta.env.VITE_TOKEN_HOST || 'https://tip-test.nadileaf.com';
-const spaceServer =
-  import.meta.env.VITE_SPACE_SERVER ||
-  'https://tip-test.nadileaf.com/api/mesoor-space';
+const WS_SERVER = import.meta.env.VITE_WS_SERVER;
+const difyUserName = 'extension-button';
+const BACKGROUND_SERVER_HOST = import.meta.env.VITE_BACKGROUND_SERVER_HOST;
+const Token_Host = import.meta.env.VITE_TOKEN_HOST;
+const spaceServer = import.meta.env.VITE_SPACE_SERVER;
 const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
-
+const enableSocketConnection =
+  import.meta.env.VITE_ENABLE_SOCKET_CONNECTION === 'true';
 // 输出环境变量日志
-console.log('import.meta.env:', import.meta.env);
+console.log('环境变量加载配置:', import.meta.env);
 console.log('环境变量生效配置:', {
   WS_SERVER,
   BACKGROUND_SERVER_HOST,
   Token_Host,
   spaceServer,
   EntityExecuteHost,
+  enableSocketConnection,
 });
 // 使用{0}表示entityType，{1}表示openId
 const syncEntityResultCheckUrl =
@@ -82,7 +82,14 @@ const tabsObject = {};
  * initial setting
  */
 browser.runtime.onInstalled.addListener(async detail => {
+  const defaultPreferences = {
+    version: 1,
+    disabled: enableSocketConnection,
+  };
   const storage = await browser.storage.sync.get();
+  if (!storage.preferences) {
+    await browser.storage.sync.set({ preferences: defaultPreferences });
+  }
 
   if (!storage.wait) {
     // isSyncWait 为 true 是用户手动同步
@@ -192,6 +199,52 @@ let apiConfig = {
     },
   ],
 };
+
+const socket$ = combineLatest([user$, preferences$]).pipe(
+  switchMap(([user, preferences]) => {
+    if (!user || preferences.disabled) {
+      if (ws) {
+        console.log(
+          `禁用开关状态改变为${preferences.disabled} 或用户${user}不存在 导致主动断开socket，`
+        );
+        ws._normalClose = true;
+        ws.close();
+        ws = null;
+      }
+      return EMPTY;
+    }
+
+    ws = connectWebSocket(user);
+    if (!ws) return EMPTY;
+    return new Observable(observer => {
+      const messageHandler = event => {
+        try {
+          const data = JSON.parse(event.data);
+          observer.next(data);
+        } catch (e) {
+          console.error('解析WebSocket消息失败:', e);
+        }
+      };
+
+      ws.addEventListener('message', messageHandler);
+
+      // 返回清理函数
+      return () => {
+        if (ws) {
+          ws.removeEventListener('message', messageHandler);
+          if (ws.readyState === WebSocket.OPEN) {
+            ws._normalClose = true;
+            ws.close();
+          }
+        }
+      };
+    });
+  }),
+  tap(socket => console.log('new socket', socket.id, socket)),
+  shareReplay(1)
+);
+socket$.subscribe();
+
 // 需要缓存headers用来重放的url
 const needCacheHeadersUrl = [
   // 多猎
@@ -210,6 +263,11 @@ const needCacheHeadersUrl = [
   '*://cupid.51job.com/imchat/open/ehire/chat/resumeDetail*',
   // 无忧job非沟通
   '*://ehirej.51job.com/resumedtl/getresume*',
+  // boss直聘
+  // 搜索
+  '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
+  // 沟通历史
+  '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -219,6 +277,7 @@ const needCacheHeadersUrlSubStream = [
   '*://cupid.51job.com/imchat/open/ehire/chat/resumeDetail*',
   '*://ehirej.51job.com/resumedtl/getresume*',
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
+  '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
@@ -251,50 +310,38 @@ async function getTokenFromTip() {
   }
 }
 
-const token$ = new BehaviorSubject(null);
-getTokenFromTip().then(token => {
-  console.log('初始化token完成:', token);
-  token$.next(token);
-});
-
-browser.cookies.onChanged.addListener(changeInfo => {
-  if (
-    changeInfo.cookie.domain.includes('mesoor.com') &&
-    changeInfo.cookie.name === 'token'
-  ) {
-    console.log('检测到 token cookie 变化:', changeInfo);
-    if (!changeInfo.removed) {
-      const token = changeInfo.cookie.value;
-      console.log('获取到新的 token:', token);
-      token$.next(token);
-    } else {
-      console.log('token 被移除，可能是用户登出');
-      token$.next(null);
-    }
-  }
-});
-
-function connectWebSocket(token) {
-  if (!token) {
-    console.error('No token available');
+function connectWebSocket(user) {
+  if (!user) {
+    console.error('No user available');
     return null;
   }
 
-  const wsUrl = `${WS_SERVER}/ws?token=${token}`;
+  const wsUrl = `${WS_SERVER}/ws?token=${user.token}`;
   const socket = new WebSocket(wsUrl);
   let reconnectTimeout;
   let reconnectAttempts = 0;
+
+  // 记录连接开始时间
+  socket._connectTime = Date.now();
   const maxReconnectAttempts = 100;
   const reconnectDelay = 2000; // 初始重连延迟2秒
   const maxReconnectDelay = 10000; // 最大重连延迟10秒
 
   socket.onopen = () => {
-    console.log('Connected to WebSocket server');
+    console.log(`Connected to WebSocket server ${user.tenantAlias}`);
+    socket._durationTimer = setInterval(() => {
+      if (socket && socket._connectTime) {
+        const duration = Date.now() - socket._connectTime;
+        console.log(
+          `当前连接持续时间: ${formatDuration(duration)} tenantAlias: ${user.tenantAlias}`
+        );
+      }
+    }, 120000); // 每2分钟打印一次
     reconnectAttempts = 0; // 重置重连次数
     socket.send(
       JSON.stringify({
         type: 'auth',
-        token: token,
+        token: user.token,
       })
     );
   };
@@ -310,19 +357,30 @@ function connectWebSocket(token) {
   };
 
   socket.onclose = event => {
+    if (socket && socket._connectTime) {
+      const duration = Date.now() - socket._connectTime;
+      console.log(
+        `连接结束当前连接持续时间: ${formatDuration(duration)} tenantAlias: ${user.tenantAlias}`
+      );
+    }
+    clearInterval(socket._durationTimer);
     console.log(
-      `WebSocket closed with code ${event.code}. Clean: ${event.wasClean}`
+      `WebSocket closed with code ${event.code}. Clean: ${event.wasClean} tenantAlias: ${user.tenantAlias}`
     );
 
     // 如果是正常关闭（比如token变化导致的关闭），不进行重连
     if (event.wasClean) {
-      console.log('WebSocket closed cleanly, not attempting to reconnect');
+      console.log(
+        `WebSocket closed cleanly, not attempting to reconnect tenantAlias: ${user.tenantAlias}`
+      );
       return;
     }
 
     // 如果超过最大重试次数，不再重连
     if (reconnectAttempts >= maxReconnectAttempts) {
-      console.log('Max reconnection attempts reached, giving up');
+      console.log(
+        `Max reconnection attempts reached, giving up tenantAlias: ${user.tenantAlias}`
+      );
       return;
     }
 
@@ -331,62 +389,54 @@ function connectWebSocket(token) {
       reconnectDelay * Math.pow(2, reconnectAttempts),
       maxReconnectDelay
     );
-    console.log(`Attempting to reconnect in ${nextDelay}ms...`);
+    console.log(
+      `Attempting to reconnect in ${nextDelay}ms... tenantAlias: ${user.tenantAlias}`
+    );
 
     clearTimeout(reconnectTimeout);
     reconnectTimeout = setTimeout(() => {
       reconnectAttempts++;
       console.log(
-        `Reconnection attempt ${reconnectAttempts} of ${maxReconnectAttempts}`
+        `Reconnection attempt ${reconnectAttempts} of ${maxReconnectAttempts} tenantAlias: ${user.tenantAlias}`
       );
-      ws = connectWebSocket(token);
+      ws = connectWebSocket(user);
     }, nextDelay);
   };
 
   return socket;
 }
 
-// 使用RxJS管理WebSocket连接
-token$
-  .pipe(
-    distinctUntilChanged((prev, curr) => {
-      // 只有当两个值都非null且相等时才认为相同
-      if (prev === null || curr === null) return false;
-      return prev === curr;
-    }),
-    tap(token => console.log('Token流收到新值:', token)),
-    filter(token => token !== null),
-    tap(token => console.log('Token非空，准备连接')),
-    debounceTime(1000), // 防止频繁重连
-    tap(token => console.log('防抖后准备建立连接')),
-    switchMap(token => {
-      if (ws) {
-        // 标记为正常关闭，这样不会触发重连
-        ws._normalClose = true;
-        ws.close();
-      }
-      ws = connectWebSocket(token);
-      if (!ws) return EMPTY;
+/**
+ * 格式化持续时间为天时分秒格式
+ * @param {number} milliseconds - 持续时间（毫秒）
+ * @returns {string} 格式化后的持续时间
+ */
+function formatDuration(milliseconds) {
+  // 计算各个时间单位
+  const seconds = Math.floor((milliseconds / 1000) % 60);
+  const minutes = Math.floor((milliseconds / (1000 * 60)) % 60);
+  const hours = Math.floor((milliseconds / (1000 * 60 * 60)) % 24);
+  const days = Math.floor(milliseconds / (1000 * 60 * 60 * 24));
 
-      return new Promise(resolve => {
-        // 保存原始的onclose处理函数
-        const originalOnClose = ws.onclose;
-        ws.onclose = event => {
-          // 如果是正常关闭（token变化导致），则resolve
-          if (ws._normalClose) {
-            console.log('WebSocket closed due to token change');
-            resolve();
-          } else {
-            // 否则调用原始的onclose处理函数进行重连
-            if (originalOnClose) {
-              originalOnClose.call(ws, event);
-            }
-          }
-        };
-      });
-    })
-  )
-  .subscribe();
+  // 构建格式化字符串
+  const parts = [];
+
+  if (days > 0) {
+    parts.push(`${days}天`);
+  }
+
+  if (hours > 0 || days > 0) {
+    parts.push(`${hours}小时`);
+  }
+
+  if (minutes > 0 || hours > 0 || days > 0) {
+    parts.push(`${minutes}分`);
+  }
+
+  parts.push(`${seconds}秒`);
+
+  return parts.join('');
+}
 
 async function handleWebSocketMessage(message) {
   const requestUniqueId = message.requestUniqueId;
@@ -1599,8 +1649,6 @@ async function injectButton2dify(url, tabId, config) {
   }
 }
 
-connectWebSocket();
-
 // 简历收录部分
 
 const maimaiResumeLast$ = maimaiResume$.pipe(
@@ -2125,16 +2173,127 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     } catch (error) {
       console.error('处理领英联系方式时出错:', error);
     }
+    const tab = await browser.tabs.get(details.tabId);
+    const tabUrl = tab.url;
+    details.url = tabUrl;
     const body = {
       // 因为合并了联系方式，所以这里需要传入data
       jsonBody: data,
-      url: details.url,
+      url: tabUrl,
       fileContentB64: [],
     };
     return { details, headers, body };
   }),
   catchError(error => {
     console.error('领英获取联系方式错误:', error);
+    return of();
+  }),
+  retry()
+);
+// 沟通
+const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
+  filter(({ details }) => {
+    return details.url.includes('www.zhipin.com/wapi/zpchat/boss/historyMsg?');
+  }),
+  map(response => {
+    const { details, replayResponse, headers } = response;
+    return { details, replayResponse, headers };
+  }),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    const bossZpUrl = new URL(details.url);
+    // 推测resumeVisible=0就是无附件
+    const gid = bossZpUrl.searchParams.get('gid');
+    const _headers = {};
+    if (details.requestHeaders) {
+      details.requestHeaders.forEach(items => {
+        if (items.value) {
+          _headers[items.name] = items.value;
+        }
+      });
+    }
+    let resp = await request(
+      'https://www.zhipin.com/wapi/zprelation/friend/getBossFriendListV2.json',
+      {
+        headers: {
+          ..._headers,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        method: 'POST',
+        body: qs.stringify({ page: '1', friendIds: gid }),
+      }
+    );
+    let respJson = await resp.json();
+    let securityId = respJson.zpData.friendList[0].securityId;
+    let uid = respJson.zpData.friendList[0].encryptUid;
+    let geekUrl =
+      'https://www.zhipin.com/wapi/zpboss/h5/chat/geek.json?uid=' +
+      gid +
+      '&geekSource=0&securityId=' +
+      securityId;
+    const resultJidAndExpid = await request(geekUrl, { headers: _headers });
+    const resultJidAndExpidResp = await resultJidAndExpid.json();
+    let [jid, expid] = [
+      resultJidAndExpidResp.zpData.data.toPositionId,
+      resultJidAndExpidResp.zpData.data.encryptExpectId,
+    ];
+    let resumeUrl =
+      'https://www.zhipin.com/wapi/zpboss/h5/geek/detail/get?entrance=7&uid=' +
+      uid +
+      '&encryptJid=' +
+      jid +
+      '&securityId=' +
+      securityId +
+      '&source=1&encryptExpId=' +
+      expid;
+    console.log('具体简历内容的url为:', resumeUrl);
+    let attachmentUrl =
+      'https://docdownload.zhipin.com/wflow/zpgeek/download/download4boss/' +
+      uid +
+      '?id=';
+    const resultData = await request(resumeUrl, {
+      headers: _headers,
+    });
+    let body = {};
+    const resultDataJson = await resultData.json();
+    // 复写
+    details.url = resumeUrl;
+    const resultAttachmentData = await request(attachmentUrl, {
+      headers: _headers,
+    });
+    const blob = await resultAttachmentData.blob();
+    const file_content = await blob.text();
+    if (!file_content.includes('没有权限查看')) {
+      const underFileContentB64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          resolve(reader.result.split(',')[1]);
+        };
+      });
+      const responseHeaders = {};
+      resultAttachmentData.headers.forEach((value, name) => {
+        responseHeaders[name] = value;
+      });
+      const fileContentB64 = {
+        fileContentB64: underFileContentB64,
+        responseHeaders: responseHeaders,
+        type: 'resumeAttachment',
+      };
+      body = {
+        jsonBody: resultDataJson,
+        url: resumeUrl,
+        fileContentB64: [fileContentB64],
+      };
+    } else {
+      body = {
+        jsonBody: resultDataJson,
+        url: resumeUrl,
+      };
+    }
+    return { details, headers, body };
+  }),
+  catchError(error => {
+    console.error('bossCommunication错误:', error);
     return of();
   }),
   retry()
@@ -2180,6 +2339,8 @@ const mergedResume$ = merge(
   maimaiResumeLast$,
   // 多猎: 实习僧:  无附件
   resumeSendHeadersV2BaseSub$,
+  // boss沟通
+  bossCommunication$,
   // html采集
   htmlSync$
 );
@@ -2317,3 +2478,30 @@ message$
     console.log('isConfirmSynchronizationMessage tabId', tabId);
     tabsObject[tabId] = 1;
   });
+
+const historyStateUpdated$ = installHistoryListener();
+historyStateUpdated$.subscribe(details => {
+  console.log('URL 变化:', details.url);
+
+  // 检查 URL 是否符合内容脚本注入条件
+  if (shouldInjectContentScript(details.url)) {
+    browser.tabs
+      .sendMessage(details.tabId, {
+        type: 'URL_CHANGED',
+        url: details.url,
+        shouldProcess: true,
+      })
+      .catch(err => console.error('发送消息失败:', err));
+  }
+});
+
+// 判断 URL 是否符合内容脚本注入条件
+function shouldInjectContentScript(url) {
+  // 这里添加与 manifest.json 中 content_scripts.matches 相同的匹配逻辑
+  const patterns = [
+    /linkedin\.com\/in\//,
+    // 添加其他需要匹配的模式...
+  ];
+
+  return patterns.some(pattern => pattern.test(url));
+}

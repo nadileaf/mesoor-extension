@@ -25,19 +25,6 @@ export const parseJwt = (token: string): TipUser => {
  * @returns 处理后的域名，带前导点
  */
 export const getDomain = (url: string): string => {
-  if (
-    url.includes(
-      'ad5a3dd2b106a43c9b2770bfcee3ba0e-1a15dada60d7f3f7.elb.cn-northwest-1.amazonaws.com.cn'
-    )
-  ) {
-    return '.ad5a3dd2b106a43c9b2770bfcee3ba0e-1a15dada60d7f3f7.elb.cn-northwest-1.amazonaws.com.cn';
-  }
-  if (url.includes('chajian.ciiicsh.com')) {
-    return '.chajian.ciicsh.com';
-  }
-  if (url.includes('tip-test.ciicsh.com')) {
-    return '.tip-test.ciicsh.com';
-  }
   const urlSplited: string[] = url.split('.');
   urlSplited.reverse();
   const domainArray: string[] = urlSplited.slice(0, 2);
