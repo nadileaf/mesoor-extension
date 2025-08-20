@@ -70,8 +70,8 @@ export default defineManifest({
       matches: [
         // 领英个人主页
         '*://www.linkedin.com/in/*',
-        // 猎聘城猎通非沟通页面
-        '*://h.liepin.com/resume/showresumedetail/*',
+        // 猎聘城猎通非沟通页面-解析效果不好，换成json抽取
+        // '*://h.liepin.com/resume/showresumedetail/*',
         // 脉脉个人主页
         '*://maimai.cn/profile/detail*',
       ],

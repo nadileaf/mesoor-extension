@@ -252,6 +252,8 @@ const needCacheHeadersUrl = [
   '*://api-rcn.duolie.com/api/com.liepin.rcnresume.get-resume-detail*',
   // 猎聘诚猎通-沟通
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
+  // 猎聘诚猎通-搜索
+  '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume-detail',
   // 智联招聘-推荐人才/搜索人才/人才管理
   '*://rd6.zhaopin.com/api/resume/detail*',
   // CGL领英的企业账户搜索页/人才推荐页
@@ -1997,6 +1999,44 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   retry(),
   share()
 );
+// 猎聘诚猎通-非沟通需要把工作经历的请求拼出来
+const liePinChengLieTongPageResume$ = resumeSendHeadersV2Base$.pipe(
+  map(response => {
+    const { details, replayResponse, headers } = response;
+    return { details, replayResponse, headers };
+  }),
+  filter(({ details }) =>
+    details.url.includes('api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume')
+  ),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+
+    const cnResIdEncode = replayResponse.data.cnResIdEncode;
+    const workExpsResponse = await request('https://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-work-exps',
+      {
+        method: 'POST',
+        headers: headers,
+        body: `resIdEncode=${cnResIdEncode}`
+      })
+    replayResponse.mesoorExtra = await workExpsResponse.json();
+    const body = {
+      jsonBody: replayResponse,
+      url: details.url,
+      fileContentB64: [],
+    };
+    console.log('猎聘诚猎通-非沟通需要把工作经历的请求拼出来', cnResIdEncode);
+    return { details, body, headers };
+  }),
+  catchError(error => {
+    const body = {
+      jsonBody: replayResponse,
+      url: details.url,
+      fileContentB64: [],
+    };
+    console.error('猎聘诚猎通-非沟通需要把工作经历的请求拼出来错误:', error);
+    return { details, body, headers };
+  }),
+  retry()
+)
 
 // 智联招聘简历附件处理流
 const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
@@ -2343,7 +2383,8 @@ const mergedResume$ = merge(
   // boss沟通
   bossCommunication$,
   // html采集
-  htmlSync$
+  htmlSync$,
+  liePinChengLieTongPageResume$
 );
 mergedResume$
   .pipe(
