@@ -1887,9 +1887,9 @@ const cacheHeaders$ =
 cacheHeaders$
   .pipe(
     filter(details => details.tabId !== -1 && details.method !== 'OPTIONS'),
-    tap(details => {
-      console.log('step 1 cacheHeaders details', details);
-    }),
+    // tap(details => {
+    //   console.log('step 1 cacheHeaders details', details);
+    // }),
     catchError(error => {
       console.error('cacheHeaders错误:', error);
       return of();
@@ -1909,12 +1909,12 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   needCacheHeadersUrl
 ).pipe(
   filter(details => details.tabId !== -1 && details.method !== 'OPTIONS'),
-  tap(details => {
-    console.log('step 2.0 cacheHeaders details', details);
-  }),
+  // tap(details => {
+  //   console.log('step 2.0 cacheHeaders details', details);
+  // }),
   mergeMap(async details => {
     // 必须的延迟，否则会出错
-    await delay(1500);
+    await delay(1000);
     const originalHeaders =
       requestsHeaderMap.get(details.requestId)?.headers ?? {};
     if (!originalHeaders) {
@@ -1989,9 +1989,9 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     const replayResponse = await _replayResponse.json();
     return { details, replayResponse, headers };
   }),
-  tap(result => {
-    console.log('重放器执行重放完成', result);
-  }),
+  // tap(({ details }) => {
+  //   console.log('重放器执行重放完成', details.url);
+  // }),
   catchError(error => {
     console.error('resumeSendHeadersV2Base错误:', error);
     return of();
@@ -2123,9 +2123,9 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
   retry()
 );
 const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
-  tap(({ details }) => {
-    console.log('resumeSendHeadersV2BaseSub$', details);
-  }),
+  // tap(({ details }) => {
+  //   console.log('resumeSendHeadersV2BaseSub$', details);
+  // }),
   filter(({ details }) => {
     // 如果命中了 needCacheHeadersUrlSubStream里面的url就继续执行
     return needCacheHeadersUrlSubStream.some(pattern => {
@@ -2156,27 +2156,19 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     return { details, replayResponse, headers };
   }),
   filter(({ details }) => {
-    return details.url.includes(
-      'www.linkedin.com/talent/api/talentLinkedInMemberProfiles'
-    );
-  }),
-  filter(({ details }) => {
-    console.log('step 2.3 cacheHeaders details', details);
-    // 实际上领英获取一次简历会调用三次这个接口，这里过滤掉取一个
     const isLinkedInProfileUrl = details.url.includes(
       'www.linkedin.com/talent/api/talentLinkedInMemberProfiles'
-    );
-    const hasContract = details.url.includes('ts_contract');
+    )
+    console.log('islinkedin', details, isLinkedInProfileUrl);
+    return isLinkedInProfileUrl;
+  }),
+
+  filter(({ details }) => {
+    // 实际上领英获取一次简历会调用三次这个接口，这里过滤掉取一个
+    // 领英搜索页
     const urlObj = new URL(details.url);
-    const hasParamsParam = urlObj.searchParams.has('params');
-    console.log(
-      'hasParamsParam',
-      hasParamsParam,
-      isLinkedInProfileUrl,
-      hasContract,
-      details.url
-    );
-    return isLinkedInProfileUrl && !hasParamsParam && hasContract;
+    const hasParams = urlObj.searchParams.size != 0;
+    return !hasParams ;
   }),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const csrfToken = headers['Csrf-Token'];
@@ -2468,9 +2460,6 @@ mergedResume$
             body: JSON.stringify(requestBody),
           }
         );
-
-        console.log('syncEntityResponse', syncEntityResponse.status !== 200);
-        console.log('syncEntityResponse22', syncEntityResponse.status);
         if (syncEntityResponse.status !== 200) {
           syncResumeFeedbackMsg.payload.isSyncResumeError = true;
           browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
