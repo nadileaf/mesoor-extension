@@ -85,7 +85,7 @@ const tabsObject = {};
 browser.runtime.onInstalled.addListener(async detail => {
   const defaultPreferences = {
     version: 1,
-    disabled: enableSocketConnection,
+    disabled: !enableSocketConnection,
   };
   const storage = await browser.storage.sync.get();
   if (!storage.preferences) {
