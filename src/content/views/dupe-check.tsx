@@ -76,6 +76,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       location.href.includes('maimai.cn') ||
       (location.href.includes('rd6.zhaopin.com') &&
         !location.href.includes('rd6.zhaopin.com/resume/detail')) ||
+      location.href.includes('xiaoyuan.zhaopin.com') ||
       location.href.includes('passport.zhaopin.com') ||
       location.href.includes('58.com') ||
       location.href.includes('attachment.zhaopin.com') ||
