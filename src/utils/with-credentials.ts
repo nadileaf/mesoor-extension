@@ -152,6 +152,25 @@ var declarativeNetRequestRules = [
       tabIds: [-1],
     },
   },
+  {
+    id: 6,
+    priority: 2,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [
+        {
+          header: 'origin',
+          operation: 'set',
+          value: 'https://lpt.liepin.com',
+        },
+      ],
+    },
+    condition: {
+      urlFilter: '*api-lpt.liepin.com*',
+      resourceTypes: ['xmlhttprequest'],
+      tabIds: [-1],
+    },
+  },
 ];
 export async function installDeclarativeNet(api: ApiConfig) {
   const rules = declarativeNetRequestRules;

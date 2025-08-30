@@ -49,6 +49,7 @@ export default defineManifest({
         '*://*.58.com/*',
         '*://*.shixiseng.com/*',
         '*://*.duolie.com/*',
+        '*://lpt.liepin.com/*',
       ],
     },
     {
@@ -59,6 +60,7 @@ export default defineManifest({
         '*://*.linkedin.com/*',
         '*://*.linkedin.cn/*',
         '*://h.liepin.com/*',
+        '*://lpt.liepin.com/*',
         '*://*.zhaopin.com/*',
         '*://*.51job.com/*',
         '*://maimai.cn/*',

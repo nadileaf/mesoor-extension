@@ -198,6 +198,26 @@ let apiConfig = {
         tabIds: [-1],
       },
     },
+    {
+      id: 6,
+      priority: 2,
+      action: {
+        type: 'modifyHeaders',
+        requestHeaders: [
+          {
+            header: 'origin',
+            operation: 'set',
+            value: 'https://lpt.liepin.com',  // 修改为指定的域名
+          },
+        ],
+      },
+      condition: {
+        urlFilter:
+          '*api-lpt.liepin.com*',
+        resourceTypes: ['xmlhttprequest'],
+        tabIds: [-1],
+      },
+    },
   ],
 };
 
@@ -271,6 +291,8 @@ const needCacheHeadersUrl = [
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
   // 沟通历史
   '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
+  // 猎聘企业-搜索
+  '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail'
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -2331,6 +2353,64 @@ const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
   }),
   retry()
 );
+// 猎聘企业版
+const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
+  filter(({ details }) => {
+    return details.url.includes('api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail');
+  }),
+  map(response => {
+    const { details, replayResponse, headers } = response;
+    return { details, replayResponse, headers };
+  }),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    const donwnloadAttachmentUrlPath = replayResponse.data?.attachmentResume?.downloadUrl;
+    let fileContentB64 = null;
+    if (donwnloadAttachmentUrlPath) {
+      const donwnloadAttachmentUrl = `https://tdoss.liepin.com/o/${donwnloadAttachmentUrlPath}`;
+      const resultAttachmentData = await request(donwnloadAttachmentUrl, {
+        headers: {
+          ...headers,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        method: 'GET',
+      });
+      const blob = await resultAttachmentData.blob();
+      const underFileContentB64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          resolve(reader.result.split(',')[1]);
+        };
+      });
+      const responseHeaders = {};
+      resultAttachmentData.headers.forEach((value, name) => {
+        responseHeaders[name] = value;
+      });
+      fileContentB64 = {
+        fileContentB64: underFileContentB64,
+        responseHeaders: responseHeaders,
+        type: 'resumeAttachment',
+      };
+    }
+    const body = {
+      jsonBody: replayResponse,
+      url: details.url,
+      fileContentB64: donwnloadAttachmentUrlPath ? [fileContentB64] : [],
+    };
+    return { details, headers, body };
+  }),
+  catchError(error => {
+    console.error('猎聘企业版错误:', error);
+    const body = {
+      jsonBody: replayResponse,
+      url: details.url,
+      fileContentB64: [],
+    };
+    return of({ details, headers, body });
+  }),
+  retry()
+);
+
 
 const htmlSync$ = message$.pipe(
   filter(isSyncHtmlMessage),
@@ -2376,7 +2456,8 @@ const mergedResume$ = merge(
   bossCommunication$,
   // html采集
   htmlSync$,
-  liePinChengLieTongPageResume$
+  liePinChengLieTongPageResume$,
+  liepinCompanyResume$
 );
 mergedResume$
   .pipe(
