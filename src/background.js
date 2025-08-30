@@ -2354,9 +2354,96 @@ const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
   retry()
 );
 // 猎聘企业版
+let requestCount = 0; // 用于记录请求次数
+const RESET_TIMEOUT = 10000; // 10秒后重置计数器
 const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => {
     return details.url.includes('api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail');
+  }),
+  filter(({ details }) => {
+    try {
+      // 获取请求体
+      const requestBody = details.requestBody;
+      
+      // 如果没有请求体，过滤掉
+      if (!requestBody) {
+        console.log('请求没有请求体，过滤掉');
+        return false;
+      }
+      
+      // 检查是否是formdata
+      if (requestBody.formData) {
+        // 获取pageParamDto字段
+        const pageParamDto = requestBody.formData.pageParamDto;
+        
+        if (!pageParamDto || !pageParamDto[0]) {
+          console.log('请求没有pageParamDto字段，过滤掉');
+          return false;
+        }
+        
+        try {
+          // 解析pageParamDto内的JSON
+          const paramData = JSON.parse(pageParamDto[0]);
+          
+          // 检查是否存在applyId这个键，不管值是什么
+          const hasApplyIdKey = paramData && 'applyId' in paramData;
+          
+          if (hasApplyIdKey) {
+            console.log('请求存在applyId键，处理该请求:', paramData.applyId);
+            return true;
+          } else {
+            console.log('请求不存在applyId键，过滤掉');
+            return false;
+          }
+        } catch (parseError) {
+          console.error('解析pageParamDto出错:', parseError);
+          return true; // 解析出错时默认放行
+        }
+      } 
+      // 如果是raw格式
+      else if (requestBody.raw) {
+        try {
+          // 解析请求体内容
+          const bodyText = decodeURIComponent(String.fromCharCode.apply(null, 
+            new Uint8Array(requestBody.raw[0].bytes)));
+          
+          // 尝试解析为JSON
+          const bodyData = JSON.parse(bodyText);
+          
+          // 检查pageParamDto字段
+          const pageParamDto = bodyData && bodyData.pageParamDto;
+          
+          if (!pageParamDto) {
+            console.log('raw请求没有pageParamDto字段，过滤掉');
+            return false;
+          }
+          
+          // 如果pageParamDto是字符串，尝试解析为JSON
+          const paramData = typeof pageParamDto === 'string' ? JSON.parse(pageParamDto) : pageParamDto;
+          
+          // 检查是否存在applyId这个键，不管值是什么
+          const hasApplyIdKey = paramData && 'applyId' in paramData;
+          
+          if (hasApplyIdKey) {
+            console.log('raw请求存在applyId键，处理该请求:', paramData.applyId);
+            return true;
+          } else {
+            console.log('raw请求不存在applyId键，过滤掉');
+            return false;
+          }
+        } catch (parseError) {
+          console.error('解析raw请求体出错:', parseError);
+          return true; // 解析出错时默认放行
+        }
+      } else {
+        console.log('请求体格式不支持，过滤掉');
+        return false;
+      }
+    } catch (error) {
+      console.error('处理请求体时出错:', error);
+      // 出错时默认放行
+      return true;
+    }
   }),
   map(response => {
     const { details, replayResponse, headers } = response;
