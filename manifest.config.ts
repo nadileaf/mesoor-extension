@@ -50,6 +50,7 @@ export default defineManifest({
         '*://*.shixiseng.com/*',
         '*://*.duolie.com/*',
         '*://lpt.liepin.com/*',
+        '*://*.yupao.com/*',
       ],
     },
     {
@@ -66,6 +67,7 @@ export default defineManifest({
         '*://maimai.cn/*',
         '*://*.58.com/*',
         '*://*.shixiseng.com/*',
+        '*://*.yupao.com/*',
       ],
     },
     {

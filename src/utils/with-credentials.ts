@@ -171,6 +171,25 @@ var declarativeNetRequestRules = [
       tabIds: [-1],
     },
   },
+  {
+    id: 7,
+    priority: 2,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [
+        {
+          header: 'origin',
+          operation: 'set',
+          value: 'https://www.yupaowang.com',
+        },
+      ],
+    },
+    condition: {
+      urlFilter: 'https://yupao-prod.yupaowang.com',
+      resourceTypes: ['xmlhttprequest'],
+      tabIds: [-1],
+    },
+  },
 ];
 export async function installDeclarativeNet(api: ApiConfig) {
   const rules = declarativeNetRequestRules;

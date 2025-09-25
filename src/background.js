@@ -292,7 +292,9 @@ const needCacheHeadersUrl = [
   // 沟通历史
   '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
   // 猎聘企业-搜索
-  '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail'
+  '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail',
+  '*://yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2',
+  '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail'
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -303,6 +305,7 @@ const needCacheHeadersUrlSubStream = [
   '*://ehirej.51job.com/resumedtl/getresume*',
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
+  'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail'
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
@@ -2525,6 +2528,108 @@ const htmlSync$ = message$.pipe(
   retry()
 );
 
+function ne(ie) {
+        if (ie == null)
+            return ie;
+        if (Array.isArray(ie))
+            return JSON.stringify([...ie].reduce( (ce, ue) => [...ce, typeof ue == "object" ? se(ue) : ue], []));
+        if (typeof ie == "object")
+            return Object.keys(ie).sort().reduce( (ue, fe) => "".concat(ue).concat(fe, "=").concat(typeof ie[fe] == "object" ? JSON.stringify(ie[fe]) : ie[fe], "&"), "")
+    }
+    function se(ie) {
+        if (ie === null)
+            return ie;
+        if (Array.isArray(ie))
+            return [...ie].reduce( (ce, ue) => [...ce, typeof ue == "object" ? se(ue) : ue], []);
+        if (typeof ie == "object")
+            return Object.keys(ie).sort().reduce( (ue, fe) => ({
+                ...ue,
+                [fe]: typeof ie[fe] == "object" ? se(ie[fe]) : ie[fe]
+            }), {})
+    }
+/**
+ * 创建鱼泡签名
+ * @param {object} data - 请求数据
+ * @param {string} T - 时间戳
+ * @param {string} V - 随机数（默认使用randomKey）
+ * @returns {string} - 生成的签名
+ */
+/**
+ * 创建鱼泡签名 - 使用Web Crypto API
+ * @param {object} data - 请求数据
+ * @param {string} timestamp - 时间戳
+ * @returns {Promise<string>} - 生成的签名
+ */
+async function createYuPaoSign(data, timestamp, nonice) {
+  const K = se({...data, "timestamp": timestamp, "nonce": nonice});
+  const Y = JSON.parse(JSON.stringify(K));
+  const ee = "*js1(Uc_m12j%hsn#1o%cn1";
+  const te = ne(Y) + ee;
+  
+  // 使用Web Crypto API计算SHA-256哈希
+  const msgBuffer = new TextEncoder().encode(te);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  
+  // 将ArrayBuffer转换为十六进制字符串
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
+const yupaoGouTongResume$ = resumeSendHeadersV2Base$.pipe(
+  map(response => {
+    const { details, replayResponse, headers } = response;
+    return { details, replayResponse, headers };
+  }),
+  filter(({ details }) =>
+    details.url.includes('yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2')
+  ),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    const otherDetailUrl = 'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail';
+    details.url = otherDetailUrl;
+    const resumeSubUuid = replayResponse.data.infoDetail.relatedInfoId;
+    const requestTimestamp = "".concat(Date.now());
+    const nonce = "".concat(Math.round(Math.random() * 999999));
+    const requestBody = {
+      resumeSubUuid,
+      scene: 0,
+    };
+    
+    // 获取签名（处理异步函数）
+    const sign = await createYuPaoSign(requestBody, requestTimestamp,nonce);
+    // 要覆盖 sign 和 timestamp 两个参数
+    const resumeInfoRes = await request(otherDetailUrl, {
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'sign': sign,
+        'timestamp': requestTimestamp,
+        "nonce": nonce
+      },
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+    const resumeInfoData = await resumeInfoRes.json();
+
+    const body = {
+      jsonBody: resumeInfoData,
+      url: otherDetailUrl,
+      fileContentB64: [],
+    };
+    return { details, headers, body };
+  }),
+  catchError(error => {
+    console.error('鱼泡获取简历错误:', error);
+    const body = {
+      jsonBody: replayResponse,
+      url: otherDetailUrl,
+      fileContentB64: [],
+    };
+    return of({ details, headers, body });
+  }),
+  retry()
+)
+
 // 简历流聚合
 const mergedResume$ = merge(
   // 领英: 简历流 json含联系方式
@@ -2541,6 +2646,7 @@ const mergedResume$ = merge(
   resumeSendHeadersV2BaseSub$,
   // boss沟通
   bossCommunication$,
+  yupaoGouTongResume$,
   // html采集
   htmlSync$,
   liePinChengLieTongPageResume$,
