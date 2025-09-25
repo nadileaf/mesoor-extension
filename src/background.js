@@ -207,13 +207,12 @@ let apiConfig = {
           {
             header: 'origin',
             operation: 'set',
-            value: 'https://lpt.liepin.com',  // 修改为指定的域名
+            value: 'https://lpt.liepin.com', // 修改为指定的域名
           },
         ],
       },
       condition: {
-        urlFilter:
-          '*api-lpt.liepin.com*',
+        urlFilter: '*api-lpt.liepin.com*',
         resourceTypes: ['xmlhttprequest'],
         tabIds: [-1],
       },
@@ -294,7 +293,7 @@ const needCacheHeadersUrl = [
   // 猎聘企业-搜索
   '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail',
   '*://yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2',
-  '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail'
+  '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -305,7 +304,7 @@ const needCacheHeadersUrlSubStream = [
   '*://ehirej.51job.com/resumedtl/getresume*',
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
-  'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail'
+  'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
@@ -2031,17 +2030,20 @@ const liePinChengLieTongPageResume$ = resumeSendHeadersV2Base$.pipe(
     return { details, replayResponse, headers };
   }),
   filter(({ details }) =>
-    details.url.includes('api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume')
+    details.url.includes(
+      'api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume'
+    )
   ),
   mergeMap(async ({ details, replayResponse, headers }) => {
-
     const cnResIdEncode = replayResponse.data.cnResIdEncode;
-    const workExpsResponse = await request('https://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-work-exps',
+    const workExpsResponse = await request(
+      'https://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-work-exps',
       {
         method: 'POST',
         headers: headers,
-        body: `resIdEncode=${cnResIdEncode}`
-      })
+        body: `resIdEncode=${cnResIdEncode}`,
+      }
+    );
     replayResponse.mesoorExtra = await workExpsResponse.json();
     const body = {
       jsonBody: replayResponse,
@@ -2061,7 +2063,7 @@ const liePinChengLieTongPageResume$ = resumeSendHeadersV2Base$.pipe(
     return { details, body, headers };
   }),
   retry()
-)
+);
 
 // 智联招聘简历附件处理流
 const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
@@ -2183,7 +2185,7 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => {
     const isLinkedInProfileUrl = details.url.includes(
       'www.linkedin.com/talent/api/talentLinkedInMemberProfiles'
-    )
+    );
     console.log('islinkedin', details, isLinkedInProfileUrl);
     return isLinkedInProfileUrl;
   }),
@@ -2193,7 +2195,7 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     // 领英搜索页
     const urlObj = new URL(details.url);
     const hasParams = urlObj.searchParams.size != 0;
-    return !hasParams ;
+    return !hasParams;
   }),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const csrfToken = headers['Csrf-Token'];
@@ -2361,36 +2363,38 @@ let requestCount = 0; // 用于记录请求次数
 const RESET_TIMEOUT = 10000; // 10秒后重置计数器
 const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => {
-    return details.url.includes('api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail');
+    return details.url.includes(
+      'api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail'
+    );
   }),
   filter(({ details }) => {
     try {
       // 获取请求体
       const requestBody = details.requestBody;
-      
+
       // 如果没有请求体，过滤掉
       if (!requestBody) {
         console.log('请求没有请求体，过滤掉');
         return false;
       }
-      
+
       // 检查是否是formdata
       if (requestBody.formData) {
         // 获取pageParamDto字段
         const pageParamDto = requestBody.formData.pageParamDto;
-        
+
         if (!pageParamDto || !pageParamDto[0]) {
           console.log('请求没有pageParamDto字段，过滤掉');
           return false;
         }
-        
+
         try {
           // 解析pageParamDto内的JSON
           const paramData = JSON.parse(pageParamDto[0]);
-          
+
           // 检查是否存在applyId这个键，不管值是什么
           const hasApplyIdKey = paramData && 'applyId' in paramData;
-          
+
           if (hasApplyIdKey) {
             console.log('请求存在applyId键，处理该请求:', paramData.applyId);
             return true;
@@ -2402,31 +2406,38 @@ const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
           console.error('解析pageParamDto出错:', parseError);
           return true; // 解析出错时默认放行
         }
-      } 
+      }
       // 如果是raw格式
       else if (requestBody.raw) {
         try {
           // 解析请求体内容
-          const bodyText = decodeURIComponent(String.fromCharCode.apply(null, 
-            new Uint8Array(requestBody.raw[0].bytes)));
-          
+          const bodyText = decodeURIComponent(
+            String.fromCharCode.apply(
+              null,
+              new Uint8Array(requestBody.raw[0].bytes)
+            )
+          );
+
           // 尝试解析为JSON
           const bodyData = JSON.parse(bodyText);
-          
+
           // 检查pageParamDto字段
           const pageParamDto = bodyData && bodyData.pageParamDto;
-          
+
           if (!pageParamDto) {
             console.log('raw请求没有pageParamDto字段，过滤掉');
             return false;
           }
-          
+
           // 如果pageParamDto是字符串，尝试解析为JSON
-          const paramData = typeof pageParamDto === 'string' ? JSON.parse(pageParamDto) : pageParamDto;
-          
+          const paramData =
+            typeof pageParamDto === 'string'
+              ? JSON.parse(pageParamDto)
+              : pageParamDto;
+
           // 检查是否存在applyId这个键，不管值是什么
           const hasApplyIdKey = paramData && 'applyId' in paramData;
-          
+
           if (hasApplyIdKey) {
             console.log('raw请求存在applyId键，处理该请求:', paramData.applyId);
             return true;
@@ -2453,7 +2464,8 @@ const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
     return { details, replayResponse, headers };
   }),
   mergeMap(async ({ details, replayResponse, headers }) => {
-    const donwnloadAttachmentUrlPath = replayResponse.data?.attachmentResume?.downloadUrl;
+    const donwnloadAttachmentUrlPath =
+      replayResponse.data?.attachmentResume?.downloadUrl;
     let fileContentB64 = null;
     if (donwnloadAttachmentUrlPath) {
       const donwnloadAttachmentUrl = `https://tdoss.liepin.com/o/${donwnloadAttachmentUrlPath}`;
@@ -2501,7 +2513,6 @@ const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
   retry()
 );
 
-
 const htmlSync$ = message$.pipe(
   filter(isSyncHtmlMessage),
   withLatestFrom(user$),
@@ -2529,24 +2540,47 @@ const htmlSync$ = message$.pipe(
 );
 
 function ne(ie) {
-        if (ie == null)
-            return ie;
-        if (Array.isArray(ie))
-            return JSON.stringify([...ie].reduce( (ce, ue) => [...ce, typeof ue == "object" ? se(ue) : ue], []));
-        if (typeof ie == "object")
-            return Object.keys(ie).sort().reduce( (ue, fe) => "".concat(ue).concat(fe, "=").concat(typeof ie[fe] == "object" ? JSON.stringify(ie[fe]) : ie[fe], "&"), "")
-    }
-    function se(ie) {
-        if (ie === null)
-            return ie;
-        if (Array.isArray(ie))
-            return [...ie].reduce( (ce, ue) => [...ce, typeof ue == "object" ? se(ue) : ue], []);
-        if (typeof ie == "object")
-            return Object.keys(ie).sort().reduce( (ue, fe) => ({
-                ...ue,
-                [fe]: typeof ie[fe] == "object" ? se(ie[fe]) : ie[fe]
-            }), {})
-    }
+  if (ie == null) return ie;
+  if (Array.isArray(ie))
+    return JSON.stringify(
+      [...ie].reduce(
+        (ce, ue) => [...ce, typeof ue == 'object' ? se(ue) : ue],
+        []
+      )
+    );
+  if (typeof ie == 'object')
+    return Object.keys(ie)
+      .sort()
+      .reduce(
+        (ue, fe) =>
+          ''
+            .concat(ue)
+            .concat(fe, '=')
+            .concat(
+              typeof ie[fe] == 'object' ? JSON.stringify(ie[fe]) : ie[fe],
+              '&'
+            ),
+        ''
+      );
+}
+function se(ie) {
+  if (ie === null) return ie;
+  if (Array.isArray(ie))
+    return [...ie].reduce(
+      (ce, ue) => [...ce, typeof ue == 'object' ? se(ue) : ue],
+      []
+    );
+  if (typeof ie == 'object')
+    return Object.keys(ie)
+      .sort()
+      .reduce(
+        (ue, fe) => ({
+          ...ue,
+          [fe]: typeof ie[fe] == 'object' ? se(ie[fe]) : ie[fe],
+        }),
+        {}
+      );
+}
 /**
  * 创建鱼泡签名
  * @param {object} data - 请求数据
@@ -2561,15 +2595,15 @@ function ne(ie) {
  * @returns {Promise<string>} - 生成的签名
  */
 async function createYuPaoSign(data, timestamp, nonice) {
-  const K = se({...data, "timestamp": timestamp, "nonce": nonice});
+  const K = se({ ...data, timestamp: timestamp, nonce: nonice });
   const Y = JSON.parse(JSON.stringify(K));
-  const ee = "*js1(Uc_m12j%hsn#1o%cn1";
+  const ee = '*js1(Uc_m12j%hsn#1o%cn1';
   const te = ne(Y) + ee;
-  
+
   // 使用Web Crypto API计算SHA-256哈希
   const msgBuffer = new TextEncoder().encode(te);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  
+
   // 将ArrayBuffer转换为十六进制字符串
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -2585,26 +2619,27 @@ const yupaoGouTongResume$ = resumeSendHeadersV2Base$.pipe(
     details.url.includes('yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2')
   ),
   mergeMap(async ({ details, replayResponse, headers }) => {
-    const otherDetailUrl = 'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail';
+    const otherDetailUrl =
+      'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail';
     details.url = otherDetailUrl;
     const resumeSubUuid = replayResponse.data.infoDetail.relatedInfoId;
-    const requestTimestamp = "".concat(Date.now());
-    const nonce = "".concat(Math.round(Math.random() * 999999));
+    const requestTimestamp = ''.concat(Date.now());
+    const nonce = ''.concat(Math.round(Math.random() * 999999));
     const requestBody = {
       resumeSubUuid,
       scene: 0,
     };
-    
+
     // 获取签名（处理异步函数）
-    const sign = await createYuPaoSign(requestBody, requestTimestamp,nonce);
+    const sign = await createYuPaoSign(requestBody, requestTimestamp, nonce);
     // 要覆盖 sign 和 timestamp 两个参数
     const resumeInfoRes = await request(otherDetailUrl, {
       headers: {
         ...headers,
         'Content-Type': 'application/json',
-        'sign': sign,
-        'timestamp': requestTimestamp,
-        "nonce": nonce
+        sign: sign,
+        timestamp: requestTimestamp,
+        nonce: nonce,
       },
       method: 'POST',
       body: JSON.stringify(requestBody),
@@ -2628,7 +2663,7 @@ const yupaoGouTongResume$ = resumeSendHeadersV2Base$.pipe(
     return of({ details, headers, body });
   }),
   retry()
-)
+);
 
 // 简历流聚合
 const mergedResume$ = merge(
