@@ -813,6 +813,32 @@ async function handleWebSocketMessage(message) {
         );
       }
       break;
+    case 'CloseTabAction':
+      try {
+        // 关闭指定的标签页
+        await browser.tabs.remove(message.tabId);
+        ws.send(
+          JSON.stringify({
+            type: 'tabClosed',
+            typeCn: '标签页关闭成功',
+            success: true,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        console.error('Error closing tab:', error);
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '关闭标签页失败',
+            error: error.message,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      }
+      break;
     case 'ScrollAction':
       if (message.tabId) {
         try {
@@ -852,6 +878,47 @@ async function handleWebSocketMessage(message) {
             })
           );
         }
+      }
+      break;
+    case 'GetPageHtmlAction':
+      try {
+        // 获取指定标签页的HTML内容
+        const [result] = await browser.scripting.executeScript({
+          target: { tabId: message.tabId },
+          function: () => {
+            return {
+              html: document.documentElement.outerHTML,
+              title: document.title,
+              url: window.location.href,
+              timestamp: new Date().toISOString(),
+            };
+          },
+        });
+
+        ws.send(
+          JSON.stringify({
+            type: 'pageHtmlRetrieved',
+            typeCn: '页面HTML获取成功',
+            success: true,
+            tabId: message.tabId,
+            html: result.result.html,
+            title: result.result.title,
+            url: result.result.url,
+            timestamp: result.result.timestamp,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        console.error('Error getting page HTML:', error);
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '获取页面HTML失败',
+            error: error.message,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
       }
       break;
     case 'HighlightElementsAction':
@@ -1110,6 +1177,7 @@ async function handleWebSocketMessage(message) {
         );
       }
       break;
+    case 'CloseTabAction':
 
     default:
       // 处理未知的 actionType
