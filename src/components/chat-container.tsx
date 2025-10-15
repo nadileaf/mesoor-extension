@@ -89,7 +89,7 @@ async function createIframe(input: Record<string, any>) {
     ...(await getCompressedSystemVariables(input)),
   });
 
-  const iframeUrl = `https://agent.mesoor.com/chatbot/uo6f9m16c0ymkBTR?${params}`;
+  const iframeUrl = `https://agent.mesoor.com/chat/uo6f9m16c0ymkBTR?${params}`;
 
   if (iframeUrl.length > 2048) {
     console.error('URL过长，请减少输入数量以防止机器人加载失败');
