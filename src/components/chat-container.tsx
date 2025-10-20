@@ -59,7 +59,7 @@ async function compressAndEncodeBase64(input: string) {
   return btoa(String.fromCharCode(...compressedUint8Array));
 }
 
-async function getCompressedInputs(input: Record<string, string>) {
+async function _getCompressedInputs(input: Record<string, string>) {
   const inputs = input || {};
   const compressedInputs: Record<string, string> = {};
   await Promise.all(
@@ -70,13 +70,13 @@ async function getCompressedInputs(input: Record<string, string>) {
   return compressedInputs;
 }
 
-async function getCompressedSystemVariables(input: any) {
+async function _getCompressedSystemVariables(input: Record<string, any>) {
   const systemVariables = input?.systemVariables || {};
   const compressedSystemVariables: Record<string, string> = {};
   await Promise.all(
     Object.entries(systemVariables).map(async ([key, value]) => {
       compressedSystemVariables[`sys.${key}`] = await compressAndEncodeBase64(
-        value as string
+        JSON.stringify(value)
       );
     })
   );
@@ -84,9 +84,15 @@ async function getCompressedSystemVariables(input: any) {
 }
 
 async function createIframe(input: Record<string, any>) {
+  // 临时禁用压缩，直接使用原始数据
+  // const params = new URLSearchParams({
+  //   ...(await _getCompressedInputs(input)),
+  //   ...(await _getCompressedSystemVariables(input)),
+  // });
+
+  // 使用未压缩的数据
   const params = new URLSearchParams({
-    ...(await getCompressedInputs(input)),
-    ...(await getCompressedSystemVariables(input)),
+    ...input, // 直接使用原始input数据
   });
 
   const iframeUrl = `https://agent.mesoor.com/chat/uo6f9m16c0ymkBTR?${params}`;
