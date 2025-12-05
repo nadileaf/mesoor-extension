@@ -352,7 +352,7 @@ async function simulateInput(xpath, text) {
       }
 
       // 3. 触发完整的输入事件序列
-      ['input', 'change'].forEach(eventType => {
+      ['input', 'change', 'compositionend', 'focus'].forEach(eventType => {
         element.dispatchEvent(new Event(eventType, { bubbles: true }));
       });
 

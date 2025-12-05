@@ -79,6 +79,18 @@ let requestsHeaderMap = new Map();
 let ws = null;
 let wait = null;
 const tabsObject = {};
+// 存储按 tabId 维度的额外同步数据，由 WebSocket 消息写入，在接口同步时一起发送
+const tabExtraDataByTabId = {};
+
+// 监听标签页关闭事件，清理与该 tabId 相关的缓存数据
+browser.tabs.onRemoved.addListener(tabId => {
+  if (tabsObject[tabId]) {
+    delete tabsObject[tabId];
+  }
+  if (tabExtraDataByTabId[tabId]) {
+    delete tabExtraDataByTabId[tabId];
+  }
+});
 /**
  * initial setting
  */
@@ -274,7 +286,7 @@ const needCacheHeadersUrl = [
   // 猎聘诚猎通-搜索
   '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume-detail',
   // 智联招聘-推荐人才/搜索人才/人才管理
-  '*://rd6.zhaopin.com/api/resume/detail*',
+  '*://rd6.zhaopin.com/api/resume/detail?*',
   // CGL领英的企业账户搜索页/人才推荐页
   '*://www.linkedin.com/talent/api/talentLinkedInMemberProfiles/*',
   // 实习僧  不知道是哪个接口
@@ -294,6 +306,10 @@ const needCacheHeadersUrl = [
   '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail',
   '*://yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2',
   '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
+  // 智联职位
+  '*://rd6.zhaopin.com/api/job/detail?*',
+  // 51job职位
+  '*://ehirej.51job.com/jobj/convert/get_info',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -304,7 +320,9 @@ const needCacheHeadersUrlSubStream = [
   '*://ehirej.51job.com/resumedtl/getresume*',
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
-  'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
+  '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
+  '*://rd6.zhaopin.com/api/job/detail?*',
+  '*://ehirej.51job.com/jobj/convert/get_info',
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
@@ -625,6 +643,106 @@ async function handleWebSocketMessage(message) {
             typeCn: '标签页信息',
             timestamp: new Date().toISOString(),
             data: tabsInfo,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      }
+      break;
+    case 'SaveTabExtraDataAction':
+      try {
+        if (!message.tabId) {
+          throw new Error('tabId is required');
+        }
+
+        // 允许前端传 extraData 或 data 字段，向后兼容
+        const extraData =
+          message.extraData !== undefined ? message.extraData : message.data;
+
+        tabExtraDataByTabId[message.tabId] = extraData;
+
+        ws.send(
+          JSON.stringify({
+            type: 'SaveTabExtraDataAction',
+            typeCn: '保存标签页额外数据成功',
+            success: true,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        console.error('保存标签页额外数据失败:', error);
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '保存标签页额外数据失败',
+            success: false,
+            error: error.message,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      }
+      break;
+    case 'DeleteTabExtraDataAction':
+      try {
+        if (!message.tabId) {
+          throw new Error('tabId is required');
+        }
+
+        if (tabExtraDataByTabId[message.tabId] !== undefined) {
+          delete tabExtraDataByTabId[message.tabId];
+        }
+
+        ws.send(
+          JSON.stringify({
+            type: 'DeleteTabExtraDataAction',
+            typeCn: '删除标签页额外数据成功',
+            success: true,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        console.error('删除标签页额外数据失败:', error);
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '删除标签页额外数据失败',
+            success: false,
+            error: error.message,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      }
+      break;
+    case 'GetTabExtraDataAction':
+      try {
+        // 将当前缓存的所有 tab 额外数据打包返回
+        const data = Object.entries(tabExtraDataByTabId).map(
+          ([tabId, extraData]) => ({
+            tabId: Number(tabId),
+            extraData,
+          })
+        );
+
+        ws.send(
+          JSON.stringify({
+            type: 'GetTabExtraDataAction',
+            typeCn: '获取标签页额外数据成功',
+            success: true,
+            data,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        console.error('获取标签页额外数据失败:', error);
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '获取标签页额外数据失败',
+            success: false,
+            error: error.message,
             requestUniqueId: requestUniqueId,
           })
         );
@@ -1137,7 +1255,6 @@ async function handleWebSocketMessage(message) {
         );
       }
       break;
-
     // 处理按键模拟操作
     case 'KeypressAction':
       // 转发按键操作到当前活动标签页
@@ -1178,7 +1295,197 @@ async function handleWebSocketMessage(message) {
       }
       break;
     case 'CloseTabAction':
+    case 'MouseOverAction':
+      console.log('[mouseoverAction] 收到鼠标悬停请求:', {
+        xpath: message.xpath,
+        tabId: message.tabId,
+        requestUniqueId: message.requestUniqueId,
+      });
 
+      if (message.xpath && message.tabId) {
+        try {
+          console.log('[mouseoverAction] 开始执行脚本注入...');
+
+          // 在指定标签页中执行鼠标悬停操作
+          const [response] = await browser.scripting.executeScript({
+            target: { tabId: message.tabId },
+            func: xpath => {
+              console.log(
+                '[mouseoverAction-injected] 开始在页面中查找元素:',
+                xpath
+              );
+
+              try {
+                // 使用 XPath 查找元素
+                const element = document.evaluate(
+                  xpath,
+                  document,
+                  null,
+                  XPathResult.FIRST_ORDERED_NODE_TYPE,
+                  null
+                ).singleNodeValue;
+
+                console.log(
+                  '[mouseoverAction-injected] XPath查找结果:',
+                  element
+                );
+
+                if (element) {
+                  console.log(
+                    '[mouseoverAction-injected] 找到元素，开始鼠标悬停:',
+                    {
+                      tagName: element.tagName,
+                      id: element.id,
+                      className: element.className,
+                      type: element.type,
+                    }
+                  );
+
+                  // 获取元素位置
+                  const rect = element.getBoundingClientRect();
+                  const centerX = rect.left + rect.width / 2;
+                  const centerY = rect.top + rect.height / 2;
+
+                  // 触发鼠标悬停事件序列
+                  ['mouseenter', 'mouseover', 'mousemove'].forEach(
+                    eventType => {
+                      const mouseEvent = new MouseEvent(eventType, {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        clientX: centerX,
+                        clientY: centerY,
+                      });
+                      element.dispatchEvent(mouseEvent);
+                      console.log(
+                        `[mouseoverAction-injected] 触发${eventType}事件`
+                      );
+                    }
+                  );
+
+                  // 滚动到元素位置
+                  element.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                  });
+                  console.log('[mouseoverAction-injected] 滚动到元素完成');
+
+                  return {
+                    success: true,
+                    message: '鼠标悬停成功',
+                    elementTag: element.tagName,
+                    elementType: element.type || null,
+                    elementId: element.id || null,
+                    elementClass: element.className || null,
+                    mousePosition: { x: centerX, y: centerY },
+                  };
+                } else {
+                  console.log('[mouseoverAction-injected] 未找到匹配的元素');
+                  return {
+                    success: false,
+                    message: '未找到匹配的元素',
+                  };
+                }
+              } catch (error) {
+                console.error(
+                  '[mouseoverAction-injected] XPath查找异常:',
+                  error
+                );
+                return {
+                  success: false,
+                  message: `XPath查找失败: ${error.message}`,
+                };
+              }
+            },
+            args: [message.xpath],
+          });
+
+          console.log('[mouseoverAction] 脚本执行完成，结果:', response.result);
+
+          // 发送执行结果
+          const resultMessage = {
+            type: 'mouseoverResult',
+            typeCn: '鼠标悬停操作结果',
+            success: response.result.success,
+            message: response.result.message,
+            elementTag: response.result.elementTag,
+            elementType: response.result.elementType,
+            elementId: response.result.elementId,
+            elementClass: response.result.elementClass,
+            mousePosition: response.result.mousePosition,
+            xpath: message.xpath,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          };
+
+          console.log('[mouseoverAction] 发送结果消息:', resultMessage);
+          ws.send(JSON.stringify(resultMessage));
+        } catch (error) {
+          console.error('[mouseoverAction] 执行异常:', error);
+
+          const errorMessage = {
+            type: 'error',
+            typeCn: '鼠标悬停操作失败',
+            error: error.message,
+            xpath: message.xpath,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          };
+
+          console.log('[mouseoverAction] 发送错误消息:', errorMessage);
+          ws.send(JSON.stringify(errorMessage));
+        }
+      } else {
+        console.error('[mouseoverAction] 参数错误 - 缺少必需参数:', {
+          hasXpath: !!message.xpath,
+          hasTabId: !!message.tabId,
+          message: message,
+        });
+
+        const paramErrorMessage = {
+          type: 'error',
+          typeCn: '参数错误',
+          error: 'xpath 和 tabId 参数是必需的',
+          requestUniqueId: requestUniqueId,
+        };
+
+        console.log('[mouseoverAction] 发送参数错误消息:', paramErrorMessage);
+        ws.send(JSON.stringify(paramErrorMessage));
+      }
+      break;
+    case 'NotificationAction':
+      {
+        // 使用 WebExtension 通知 API 显示系统通知
+        const title = message.title || 'Mesoor 通知';
+        const body = message.message || '你有新的消息';
+        const iconUrl = message.iconUrl || 'public/logo.png';
+        try {
+          await browser.notifications.create('', {
+            type: 'basic',
+            iconUrl,
+            title,
+            message: body,
+          });
+          ws.send(
+            JSON.stringify({
+              type: message.actionType,
+              typeCn: '通知已展示',
+              success: true,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        } catch (error) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '通知展示失败',
+              error: error.message,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
+      break;
     default:
       // 处理未知的 actionType
       ws.send(
@@ -2816,6 +3123,35 @@ mergedResume$
           }
         }
         console.log('合并流中的body数据:', body);
+
+        // 从缓存中取出该 tabId 维度的额外同步数据
+        const cachedExtraData = tabExtraDataByTabId[details.tabId];
+
+        // 通过浏览器扩展 API 获取当前 tab 的详细信息，组装为 tabInfo
+        let tabInfo = null;
+        try {
+          const tab = await browser.tabs.get(details.tabId);
+          if (tab) {
+            tabInfo = {
+              tabId: tab.id,
+              windowId: tab.windowId,
+              url: tab.url,
+              title: tab.title,
+              active: tab.active,
+              status: tab.status,
+              // 可以按需继续补充字段
+            };
+          }
+        } catch (tabError) {
+          console.error('获取 tab 信息失败:', tabError);
+        }
+
+        // 组合 extraData：包含 tabInfo 和之前缓存的额外数据
+        const extraData = {
+          tabInfo,
+          cachedExtraData,
+        };
+
         const requestBody = {
           html: details?.html,
           jsonBody: body?.jsonBody,
@@ -2824,6 +3160,8 @@ mergedResume$
           requestHeaders: headers,
           requestUrl: bodyUrl,
           fileContentB64: body.fileContentB64,
+          // 将额外数据一并发送给后端（如果存在）
+          extraData,
         };
         console.log('发送到服务器的requestBody:', requestBody);
         const syncEntityResponse = await request(
@@ -2853,6 +3191,7 @@ mergedResume$
         );
         syncResumeFeedbackMsg.payload.openId = openId;
         syncResumeFeedbackMsg.payload.tenant = tenantId;
+        syncResumeFeedbackMsg.payload.entityType = entityType;
         browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
         return { syncEntityResponse, openId, entityType, tenantId };
       } catch (error) {

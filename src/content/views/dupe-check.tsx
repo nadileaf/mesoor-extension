@@ -1,5 +1,4 @@
 import './dupe-check.css';
-
 import { isNil } from 'lodash-es';
 import {
   AlertCircle,
@@ -50,6 +49,7 @@ interface ModernDupeCheckState {
   wait: boolean;
   isConfirmSynchronize: boolean;
   requestId?: string;
+  entityType: 'Resume' | 'Job';
 }
 
 // 确认同步消息接口
@@ -108,6 +108,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       env: 'tip.mesoor.com',
       wait: true,
       isConfirmSynchronize: false,
+      entityType: 'Resume' as const,
     };
   });
 
@@ -161,7 +162,10 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       errorMessage,
       isConfirmSynchronize,
     } = state;
-
+    const entityTypeMap = {
+      Resume: '人才库简历',
+      Job: '职位库职位',
+    };
     if (!isActive) return '未激活';
 
     if (isSyncResumeError && errorCode === 403) return '已到达资源限制';
@@ -181,9 +185,9 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     if (isSynchronizingResume) {
       return wait
         ? isConfirmSynchronize
-          ? '正在同步简历...'
-          : '同步该简历?'
-        : '正在同步简历...';
+          ? `正在同步...`
+          : `同步该简历?`
+        : `正在同步...`;
     }
 
     if (isCheckingDupe) return '正在检查...';
@@ -201,7 +205,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       }
     }
 
-    return '同步完成，点击查看人才库简历';
+    return `同步完成，点击查看${entityTypeMap[state.entityType]}`;
   }, [state]);
 
   // 获取图标
@@ -315,6 +319,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       isConfirmSynchronize,
       env,
       openId,
+      entityType,
     } = state;
 
     // 查重失败时重试
@@ -333,7 +338,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       }
 
       // 企业版跳转到简历详情页
-      const url = `https://${env}/entity/${openId}?type=Resume`;
+      const url = `https://${env}/entity/${openId}?type=${entityType}`;
       window.open(url);
       return;
     }
