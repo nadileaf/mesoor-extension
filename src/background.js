@@ -2386,6 +2386,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     }
     const _replayResponse = await request(details.url, opt);
     const replayResponse = await _replayResponse.json();
+    requestsHeaderMap.delete(details.requestId);
     return { details, replayResponse, headers };
   }),
   // tap(({ details }) => {
@@ -2449,6 +2450,20 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) =>
     details.url.includes('rd6.zhaopin.com/api/resume/detail')
   ),
+    filter(({ details }) => {
+    try {
+      if (!details?.requestBody?.raw || !details.requestBody.raw.length) {
+        return true; 
+      }
+      const rawBytes = details.requestBody.raw[0].bytes;
+      const requestBodyText = new TextDecoder().decode(rawBytes);
+      const body = JSON.parse(requestBodyText);
+      return body.skipRead !== true;
+    } catch (e) {
+      // 解析失败，直接过滤，
+      return false;
+    }
+  }),
   mergeMap(async ({ details, replayResponse, headers }) => {
     try {
       const url = new URL(details.url);
