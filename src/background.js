@@ -1955,7 +1955,7 @@ browser.action.onClicked.addListener(async tab => {
 async function getTokenFromCookie() {
   try {
     const token_obj = await browser.cookies.get({
-      url: 'https://tip.mesoor.com',
+      url: Token_Host,
       name: 'token',
     });
     if (token_obj && token_obj.value) {
@@ -1980,7 +1980,14 @@ browser.webRequest.onBeforeRequest.addListener(
           const token = await getTokenFromCookie();
 
           if (token) {
-            const response = await fetch(details.url, {
+            const url = new URL(details.url);
+
+            // 如果是 localhost 且没有端口，则补上 8080 端口
+            if (url.hostname === 'localhost' && !url.port) {
+              url.port = '8080';
+            }
+
+            const response = await fetch(url.toString(), {
               method: 'GET',
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -2004,8 +2011,8 @@ browser.webRequest.onBeforeRequest.addListener(
   {
     urls: [
       '*://web-extension-use.mesoor.com/v1/actions/configs/id*',
-      'http://localhost:8080/v1/actions/configs/id*',
-      'https://localhost:8080/v1/actions/configs/id*',
+      '*://web-extension-use.nadileaf.com/v1/actions/configs/id*',
+      '*://localhost/v1/actions/configs/id*',
     ],
   }
 );
@@ -2576,7 +2583,6 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     const isLinkedInProfileUrl = details.url.includes(
       'www.linkedin.com/talent/api/talentLinkedInMemberProfiles'
     );
-    console.log('islinkedin', details, isLinkedInProfileUrl);
     return isLinkedInProfileUrl;
   }),
 
