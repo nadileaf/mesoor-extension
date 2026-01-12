@@ -1,7 +1,7 @@
 import browser from 'webextension-polyfill';
 
 // 监听来自background的消息
-browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log(message);
   if (message.action) {
     switch (message.action) {
@@ -12,6 +12,22 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         const scrollResult = scrollPage(message);
         sendResponse(scrollResult);
         break;
+      case 'ScrollToBottomOnceAction':
+        Promise.resolve()
+          .then(() =>
+            scrollToBottomOnce({
+              smooth: message.smooth !== false,
+              css: message.css,
+            })
+          )
+          .then(result => sendResponse(result))
+          .catch(error =>
+            sendResponse({
+              success: false,
+              message: error?.message || String(error),
+            })
+          );
+        return true;
       case 'ClickElementAction':
         const clickResult = simulateClick(message.xpath);
         sendResponse(clickResult);
@@ -21,13 +37,23 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         sendResponse(inputResult);
         break;
       case 'GetDomTreeAction':
-        const domTree = getDomTree();
+        const domTree = highlightElements(false);
         sendResponse(domTree);
         break;
       case 'HighlightElementsAction':
         const highlightResult = highlightElements(true);
         console.log(highlightResult);
         sendResponse(highlightResult);
+        break;
+      case 'HighlightElementByXPathAction':
+        const singleHighlightResult = highlightElementByXPath(message.xpath);
+        sendResponse(singleHighlightResult);
+        break;
+      case 'RemoveHighlightElementAction':
+        const removeSingleHighlightResult = removeHighlightElementByXPath(
+          message.xpath
+        );
+        sendResponse(removeSingleHighlightResult);
         break;
       case 'RemoveHighlightAction':
         const removeHighlightResult = highlightElements(false);
@@ -55,18 +81,262 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   } else {
     switch (message.type) {
       case 'receive_html':
-        await window.delay(2000);
-        const html = await window.processHTML();
-        console.log('成功获取 HTML, 长度:', html.length);
-        return {
-          html,
-          url: location.href,
-          origin: location.origin,
-        };
+        Promise.resolve()
+          .then(() => window.delay(2000))
+          .then(() => window.processHTML())
+          .then(html => {
+            console.log('成功获取 HTML, 长度:', html.length);
+            sendResponse({
+              html,
+              url: location.href,
+              origin: location.origin,
+            });
+          });
+        return true;
     }
   }
   return true;
 });
+
+function isScrollableContainer(el) {
+  if (!el || el === document.body || el === document.documentElement)
+    return false;
+  const style = window.getComputedStyle(el);
+  const overflowY = style.overflowY;
+  const scrollableY =
+    overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+  if (!scrollableY) return false;
+  return el.scrollHeight > el.clientHeight + 5;
+}
+
+function pickBestScrollableContainer() {
+  const all = Array.from(document.querySelectorAll('*'));
+  let best = null;
+  let bestDistance = 0;
+  for (const el of all) {
+    if (!isScrollableContainer(el)) continue;
+    const distance = el.scrollHeight - el.clientHeight;
+    if (distance > bestDistance) {
+      best = el;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+async function waitScrollStable(getTop, maxWaitMs = 1500) {
+  const start = Date.now();
+  let stableCount = 0;
+  let lastTop = getTop();
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const top = getTop();
+    if (top === lastTop) {
+      stableCount++;
+    } else {
+      stableCount = 0;
+      lastTop = top;
+    }
+    if (stableCount >= 6) return;
+  }
+}
+
+async function scrollToBottomOnce(options) {
+  const smooth = options?.smooth !== false;
+  const css = options?.css;
+
+  let targetEl = null;
+  let selectedBy = '';
+
+  if (css) {
+    targetEl = document.querySelector(css);
+    selectedBy = 'css';
+    if (!targetEl) {
+      throw new Error(`未找到匹配的css选择器: ${css}`);
+    }
+  }
+
+  // 未传 css 时：自动探测可滚动距离最大的容器
+  if (!targetEl) {
+    targetEl = pickBestScrollableContainer();
+    if (targetEl) {
+      selectedBy = 'auto';
+    }
+  }
+
+  // 如果没有找到可滚动容器，就退回到整页滚动
+  const isContainer = !!targetEl;
+  const scrollingElement =
+    document.scrollingElement || document.documentElement;
+
+  const getTop = () => (isContainer ? targetEl.scrollTop : window.scrollY);
+  const getScrollHeight = () =>
+    isContainer
+      ? targetEl.scrollHeight
+      : document.documentElement.scrollHeight || document.body.scrollHeight;
+  const getClientHeight = () =>
+    isContainer ? targetEl.clientHeight : window.innerHeight;
+
+  const before = {
+    scrollTop: getTop(),
+    scrollHeight: getScrollHeight(),
+    clientHeight: getClientHeight(),
+  };
+
+  const targetTop = Math.max(0, before.scrollHeight - before.clientHeight - 1);
+
+  if (isContainer) {
+    targetEl.scrollTo({ top: targetTop, behavior: smooth ? 'smooth' : 'auto' });
+  } else {
+    scrollingElement.scrollTo({
+      top: targetTop,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  }
+
+  await waitScrollStable(getTop);
+
+  const after = {
+    scrollTop: getTop(),
+    scrollHeight: getScrollHeight(),
+    clientHeight: getClientHeight(),
+  };
+
+  return {
+    success: true,
+    message: '滚动完成',
+    selectedBy,
+    css: css || null,
+    isContainer,
+    containerTag: isContainer ? targetEl.tagName : null,
+    containerClass: isContainer ? targetEl.className : null,
+    before,
+    after,
+    distanceToBottom: after.scrollHeight - after.clientHeight - after.scrollTop,
+    position: {
+      x: window.scrollX,
+      y: window.scrollY,
+    },
+  };
+}
+
+function highlightElementByXPath(xpath) {
+  try {
+    if (!xpath) {
+      return {
+        success: false,
+        found: false,
+        highlightedCount: 0,
+        error: '缺少必要参数 xpath',
+      };
+    }
+
+    const existingRemoved = removeHighlightElementByXPath(xpath);
+
+    let container = document.getElementById(
+      'mesoor-single-highlight-container'
+    );
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'mesoor-single-highlight-container';
+      container.style.position = 'fixed';
+      container.style.pointerEvents = 'none';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      container.style.zIndex = '2147483647';
+      document.documentElement.appendChild(container);
+    }
+
+    const snapshot = document.evaluate(
+      xpath,
+      document,
+      null,
+      XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+      null
+    );
+
+    let highlightedCount = 0;
+    for (let i = 0; i < snapshot.snapshotLength; i++) {
+      const node = snapshot.snapshotItem(i);
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) continue;
+
+      const element = node;
+      const rect = element.getBoundingClientRect();
+
+      const overlay = document.createElement('div');
+      overlay.style.position = 'absolute';
+      overlay.style.border = '2px solid #FF0000';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.boxSizing = 'border-box';
+      overlay.style.top = `${rect.top}px`;
+      overlay.style.left = `${rect.left}px`;
+      overlay.style.width = `${rect.width}px`;
+      overlay.style.height = `${rect.height}px`;
+      overlay.setAttribute('data-mesoor-xpath', xpath);
+      overlay.setAttribute('data-mesoor-index', String(i));
+
+      container.appendChild(overlay);
+      element.setAttribute(
+        'mesoor-single-highlight-id',
+        'mesoor-single-highlight'
+      );
+      highlightedCount++;
+    }
+
+    return {
+      success: highlightedCount > 0,
+      found: highlightedCount > 0,
+      xpath,
+      highlightedCount,
+      removedCount: existingRemoved?.removedCount || 0,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      found: false,
+      highlightedCount: 0,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+function removeHighlightElementByXPath(xpath) {
+  if (!xpath) {
+    const container = document.getElementById(
+      'mesoor-single-highlight-container'
+    );
+    if (container) {
+      container.remove();
+    }
+    const highlightedElements = document.querySelectorAll(
+      '[mesoor-single-highlight-id]'
+    );
+    highlightedElements.forEach(element => {
+      element.removeAttribute('mesoor-single-highlight-id');
+    });
+    return { success: true, removedCount: 0 };
+  }
+
+  const container = document.getElementById(
+    'mesoor-single-highlight-container'
+  );
+  let removedCount = 0;
+  if (container) {
+    const overlays = container.querySelectorAll(
+      `[data-mesoor-xpath="${CSS.escape(xpath)}"]`
+    );
+    overlays.forEach(el => {
+      el.remove();
+      removedCount++;
+    });
+    if (container.childElementCount === 0) {
+      container.remove();
+    }
+  }
+  return { success: true, removedCount, xpath };
+}
 
 // 检查元素是否可点击
 function isClickable(element) {

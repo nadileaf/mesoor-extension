@@ -310,6 +310,8 @@ const needCacheHeadersUrl = [
   '*://rd6.zhaopin.com/api/job/detail?*',
   // 51job职位
   '*://ehirej.51job.com/jobj/convert/get_info',
+  // 51job发起chat请求
+  '*://cupid.51job.com/open/im/ehire/chat-detail*',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -323,6 +325,7 @@ const needCacheHeadersUrlSubStream = [
   '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
   '*://rd6.zhaopin.com/api/job/detail?*',
   '*://ehirej.51job.com/jobj/convert/get_info',
+  '*://cupid.51job.com/open/im/ehire/chat-detail*',
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
@@ -494,6 +497,69 @@ async function handleWebSocketMessage(message) {
           requestUniqueId,
         })
       );
+      break;
+    case 'ScrollToBottomOnceAction':
+      if (message.tabId) {
+        try {
+          // 先切换到目标标签页
+          await browser.tabs.update(message.tabId, { active: true });
+
+          // 在目标标签页中执行滚动到底部（一次性动作）
+          const result = await browser.tabs.sendMessage(message.tabId, {
+            action: 'ScrollToBottomOnceAction',
+            smooth: message.smooth !== false,
+            css: message.css,
+          });
+
+          ws.send(
+            JSON.stringify({
+              type: 'scrollToBottomOnceComplete',
+              typeCn: '页面滚动到底部（一次）结果',
+              success: true,
+              tabId: message.tabId,
+              ...result,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        } catch (error) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '页面滚动到底部（一次）失败',
+              error: error.message,
+              tabId: message.tabId,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
+      break;
+    case 'GoBackAction':
+      if (message.tabId) {
+        try {
+          await browser.tabs.update(message.tabId, { active: true });
+          await browser.tabs.goBack(message.tabId);
+          ws.send(
+            JSON.stringify({
+              type: 'goBackComplete',
+              typeCn: '页面后退结果',
+              success: true,
+              tabId: message.tabId,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        } catch (error) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '页面后退失败',
+              error: error.message,
+              tabId: message.tabId,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
       break;
     case 'OpenTabAction':
       if (message.url) {
@@ -785,6 +851,54 @@ async function handleWebSocketMessage(message) {
         }
       }
       break;
+    case 'GetDomTreeAction':
+      if (!message.tabId) {
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '参数错误',
+            error: '缺少必要参数 tabId',
+            requestUniqueId: requestUniqueId,
+          })
+        );
+        break;
+      }
+
+      try {
+        await browser.tabs.update(message.tabId, { active: true });
+        const result = await browser.tabs.sendMessage(message.tabId, {
+          action: 'GetDomTreeAction',
+        });
+
+        console.log('GetDomTreeAction: content-script result keys', {
+          keys: result ? Object.keys(result) : null,
+          tabId: message.tabId,
+          requestUniqueId,
+        });
+
+        ws.send(
+          JSON.stringify({
+            type: 'GetDomTreeAction',
+            typeCn: '获取DOM树结果',
+            success: true,
+            tabId: message.tabId,
+            domTree: result?.domTree,
+            originalHTML: result?.originalHTML,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '获取DOM树失败',
+            error: error.message,
+            tabId: message.tabId,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      }
+      break;
     case 'SendKeyAction':
       if (!message.tabId || !message.xpath || message.value === undefined) {
         ws.send(
@@ -1061,6 +1175,45 @@ async function handleWebSocketMessage(message) {
           } else {
             console.error(result.error);
             throw new Error(result.error || '高亮元素失败');
+          }
+        } catch (error) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '高亮元素失败',
+              error: error.message,
+              tabId: message.tabId,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
+      break;
+    case 'HighlightElementByXPathAction':
+    case 'RemoveHighlightElementAction':
+      {
+        try {
+          const payload = {
+            action: message.actionType,
+          };
+          if (message.xpath) {
+            payload.xpath = message.xpath;
+          }
+          const result = await browser.tabs.sendMessage(message.tabId, payload);
+          console.log(result);
+          if (result) {
+            ws.send(
+              JSON.stringify({
+                type: message.actionType,
+                success: true,
+                tabId: message.tabId,
+                requestUniqueId: requestUniqueId,
+                result,
+              })
+            );
+          } else {
+            console.error(result?.error);
+            throw new Error(result?.error || '高亮元素失败');
           }
         } catch (error) {
           ws.send(
@@ -2457,10 +2610,10 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) =>
     details.url.includes('rd6.zhaopin.com/api/resume/detail')
   ),
-    filter(({ details }) => {
+  filter(({ details }) => {
     try {
       if (!details?.requestBody?.raw || !details.requestBody.raw.length) {
-        return true; 
+        return true;
       }
       const rawBytes = details.requestBody.raw[0].bytes;
       const requestBodyText = new TextDecoder().decode(rawBytes);
