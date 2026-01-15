@@ -314,6 +314,8 @@ const needCacheHeadersUrl = [
   '*://cupid.51job.com/open/im/ehire/chat-detail*',
   // 智联招聘沟通页获取聊天信息
   '*://rd6.zhaopin.com/api/im/session/detail*',
+  // 猎聘城猎通-职位编辑页-职位信息
+  '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -329,6 +331,7 @@ const needCacheHeadersUrlSubStream = [
   '*://ehirej.51job.com/jobj/convert/get_info',
   '*://cupid.51job.com/open/im/ehire/chat-detail*',
   '*://rd6.zhaopin.com/api/im/session/detail*',
+  '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
