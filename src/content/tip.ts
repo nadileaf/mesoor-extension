@@ -13,6 +13,11 @@ window.addEventListener('message', event => {
     return;
   }
 
+  if (data.type === 'ping') {
+    window.postMessage({ source, action: 'pong' }, '*');
+    return;
+  }
+
   if (['submitResume', 'publishJob'].includes(data.type)) {
     // 网页请求调用插件功能，将消息转发给插件后台
     chrome.runtime.sendMessage({ ...data }, response => {

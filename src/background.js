@@ -1898,7 +1898,13 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (['submitResume', 'publishJob'].includes(request.type)) {
     // 处理插件按钮触发
     console.log('处理插件按钮触发', request);
-    injectButton2dify(request.url, sender.tab.id, request.config)
+    injectButton2dify(
+      request.url,
+      sender.tab.id,
+      request.config,
+      request.jobId,
+      request.resumeId
+    )
       .then(result => {
         sendResponse({ success: true, result });
       })
@@ -2218,20 +2224,22 @@ browser.webRequest.onBeforeRequest.addListener(
 
 // 功能: 注入按钮提交到Dify
 async function injectButton2dify(url, tabId, config, jobId, resumeId) {
+  const token = await getTokenFromTip();
+  if (!token) {
+    throw new Error('无法获取认证token');
+  }
+
+  const inputs = {
+    config,
+    token,
+    tabId,
+    jobId,
+    resumeId,
+  };
   try {
-    console.log('注入按钮:', url, tabId, config);
-    const token = await getTokenFromTip();
-    if (!token) {
-      throw new Error('无法获取认证token');
-    }
+    console.log('注入按钮:', url, inputs);
     const postData = {
-      inputs: {
-        config: config,
-        token: token,
-        tabId: tabId,
-        jobId: jobId,
-        resumeId: resumeId,
-      },
+      inputs,
       response_mode: 'blocking',
       user: difyUserName,
     };
