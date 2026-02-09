@@ -301,7 +301,7 @@ const needCacheHeadersUrl = [
   // 搜索
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
   // 沟通历史
-  '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
+  // '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
   // 猎聘企业-搜索
   '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail',
   '*://yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2',
@@ -313,9 +313,11 @@ const needCacheHeadersUrl = [
   // 51job发起chat请求
   '*://cupid.51job.com/open/im/ehire/chat-detail*',
   // 智联招聘沟通页获取聊天信息
-  '*://rd6.zhaopin.com/api/im/session/detail*',
+  // '*://rd6.zhaopin.com/api/im/session/detail*',
   // 猎聘城猎通-职位编辑页-职位信息
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
+  // 58同城-简历详情
+  '*://jianli.58.com/resumedetail/v2/single*',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -332,6 +334,11 @@ const needCacheHeadersUrlSubStream = [
   '*://cupid.51job.com/open/im/ehire/chat-detail*',
   '*://rd6.zhaopin.com/api/im/session/detail*',
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
+  '*://jianli.58.com/resumedetail/v2/single*',
+];
+// 执行截图的配置
+const needViewportScreenshotUrlSubStream = [
+  '*://jianli.58.com/resumedetail/v2/single*',
 ];
 // 脉脉招聘页面中简历管理页面的简历手抓
 const maimaiResume$ = RequestListen.install([
@@ -559,6 +566,39 @@ async function handleWebSocketMessage(message) {
             JSON.stringify({
               type: 'error',
               typeCn: '页面后退失败',
+              error: error.message,
+              tabId: message.tabId,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
+      break;
+    case 'BlurElementAction':
+      if (message.tabId) {
+        try {
+          await browser.tabs.update(message.tabId, { active: true });
+          const result = await browser.tabs.sendMessage(message.tabId, {
+            action: 'BlurElementAction',
+            xpath: message.xpath,
+            clickBody: message.clickBody,
+            delayMs: message.delayMs,
+          });
+          ws.send(
+            JSON.stringify({
+              type: 'blurElementComplete',
+              typeCn: '元素失焦结果',
+              success: true,
+              tabId: message.tabId,
+              ...result,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        } catch (error) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '元素失焦失败',
               error: error.message,
               tabId: message.tabId,
               requestUniqueId: requestUniqueId,
@@ -2193,11 +2233,14 @@ async function injectButton2dify(url, tabId, config) {
       response_mode: 'blocking',
       user: difyUserName,
     };
-    const response = await fetch('https://agent.mesoor.com/v1/workflows/run', {
+    // VITE_AGENT_HOST=agent.mesoor.com
+    // =app-q7ip7PqzrLJGc4siEtBhrjay
+    const agentBaseUrl = import.meta.env.VITE_AGENT_HOST;
+    const response = await fetch(`${agentBaseUrl}/v1/workflows/run`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer app-q7ip7PqzrLJGc4siEtBhrjay',
+        Authorization: `Bearer ${import.meta.env.VITE_AGENT_CALLBACK_TOKEN}`,
       },
       body: JSON.stringify(postData),
     });
@@ -2717,10 +2760,53 @@ const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
     });
   }),
   mergeMap(async ({ details, replayResponse }) => {
+    let fileContentB64 = [];
+    try {
+      const needScreenshot = needViewportScreenshotUrlSubStream.some(
+        pattern => {
+          const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+          return regex.test(details.url);
+        }
+      );
+      if (needScreenshot && details?.tabId !== -1) {
+        try {
+          const tab = await browser.tabs.get(details.tabId);
+          if (tab) {
+            await browser.windows.update(tab.windowId, { focused: true });
+            await browser.tabs.update(details.tabId, { active: true });
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (e) {
+          console.error('截图前激活tab/window失败:', e);
+        }
+        const screenshotResult = await handleScreenShot({
+          tabId: details.tabId,
+          viewPort: true,
+        });
+        const screenshotDataUrl =
+          screenshotResult?.screenshot || screenshotResult?.dataUrl;
+        if (screenshotResult?.success && screenshotDataUrl) {
+          const b64 = screenshotDataUrl.split(',')[1];
+          if (b64) {
+            fileContentB64.push({
+              fileContentB64: b64,
+              type: 'pageViewportScreenshot',
+              responseHeaders: {
+                'Content-Type': 'image/png',
+                'content-disposition': 'attachment; filename="viewport.png"',
+                type: 'screenshot',
+              },
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('子集重放后截图失败:', e);
+    }
     const body = {
       jsonBody: replayResponse,
       url: details.url,
-      fileContentB64: [],
+      fileContentB64: fileContentB64,
     };
     const headers = {};
     return { details, headers, body };

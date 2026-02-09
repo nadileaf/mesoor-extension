@@ -28,6 +28,23 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
           );
         return true;
+      case 'BlurElementAction':
+        Promise.resolve()
+          .then(() =>
+            blurElement({
+              xpath: message.xpath,
+              clickBody: message.clickBody !== false,
+              delayMs: message.delayMs,
+            })
+          )
+          .then(result => sendResponse(result))
+          .catch(error =>
+            sendResponse({
+              success: false,
+              error: error?.message || String(error),
+            })
+          );
+        return true;
       case 'ClickElementAction':
         const clickResult = simulateClick(message.xpath);
         sendResponse(clickResult);
@@ -97,6 +114,83 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+
+async function blurElement(options) {
+  const xpath = options?.xpath;
+  const clickBody = options?.clickBody !== false;
+  const delayMs = Number.isFinite(options?.delayMs) ? options.delayMs : 0;
+
+  if (!xpath) {
+    return {
+      success: false,
+      error: '缺少必要参数 xpath',
+    };
+  }
+
+  const element = getElementByXPath(xpath);
+  if (!element) {
+    return {
+      success: false,
+      error: `元素不存在: ${xpath}`,
+    };
+  }
+
+  // 确保先聚焦再失焦，很多框架的校验依赖这一对事件
+  try {
+    element.focus();
+  } catch (e) {
+    // ignore
+  }
+  await new Promise(resolve => setTimeout(resolve, delayMs));
+
+  try {
+    element.blur();
+  } catch (e) {
+    // ignore
+  }
+  try {
+    element.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+  } catch (e) {
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+
+  if (clickBody) {
+    try {
+      document.body.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        })
+      );
+      document.body.dispatchEvent(
+        new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        })
+      );
+      document.body.dispatchEvent(
+        new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+        })
+      );
+    } catch (e) {
+      document.body.click();
+    }
+  }
+
+  return {
+    success: true,
+    element: {
+      tagName: element.tagName,
+      id: element.id,
+      className: element.className,
+    },
+  };
+}
 
 function isScrollableContainer(el) {
   if (!el || el === document.body || el === document.documentElement)
