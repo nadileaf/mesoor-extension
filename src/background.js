@@ -2217,7 +2217,7 @@ browser.webRequest.onBeforeRequest.addListener(
 );
 
 // 功能: 注入按钮提交到Dify
-async function injectButton2dify(url, tabId, config) {
+async function injectButton2dify(url, tabId, config, jobId, resumeId) {
   try {
     console.log('注入按钮:', url, tabId, config);
     const token = await getTokenFromTip();
@@ -2229,6 +2229,8 @@ async function injectButton2dify(url, tabId, config) {
         config: config,
         token: token,
         tabId: tabId,
+        jobId: jobId,
+        resumeId: resumeId,
       },
       response_mode: 'blocking',
       user: difyUserName,
