@@ -86,6 +86,7 @@ export default defineManifest({
     },
     {
       matches: ['<all_urls>'],
+      all_frames: true,
       js: ['src/content/tip.ts'],
     },
   ],
