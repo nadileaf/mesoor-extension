@@ -246,8 +246,9 @@ const socket$ = combineLatest([user$, preferences$]).pipe(
       return EMPTY;
     }
 
-    ws = connectWebSocket(user);
-    if (!ws) return EMPTY;
+    const socket = connectWebSocket(user);
+    if (!socket) return EMPTY;
+    ws = socket;
     return new Observable(observer => {
       const messageHandler = event => {
         try {
@@ -258,16 +259,20 @@ const socket$ = combineLatest([user$, preferences$]).pipe(
         }
       };
 
-      ws.addEventListener('message', messageHandler);
+      socket.addEventListener('message', messageHandler);
 
       // 返回清理函数
       return () => {
-        if (ws) {
-          ws.removeEventListener('message', messageHandler);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws._normalClose = true;
-            ws.close();
-          }
+        socket.removeEventListener('message', messageHandler);
+        if (
+          socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING
+        ) {
+          socket._normalClose = true;
+          socket.close();
+        }
+        if (ws === socket) {
+          ws = null;
         }
       };
     });
