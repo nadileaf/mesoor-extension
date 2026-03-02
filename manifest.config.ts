@@ -45,6 +45,7 @@ export default defineManifest({
         '*://*.liepin.com/im/showmsgnewpage*',
         '*://*.liepin.com/job/showeditpage*',
         '*://*.liepin.com/resume/gethjobdetail/*',
+        '*://*.liepin.com/resume/showresumedetail/*',
         '*://*.zhaopin.com/*',
         '*://*.51job.com/*',
         '*://maimai.cn/*',
