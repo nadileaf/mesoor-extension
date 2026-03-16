@@ -2536,6 +2536,32 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   //   console.log('step 2.0 cacheHeaders details', details);
   // }),
   mergeMap(async details => {
+    // 手动模式下：先等待用户确认，再执行重放
+    let preconfirmed = false;
+    let preconfirmedRequestId = null;
+    if (wait) {
+      preconfirmed = true;
+      preconfirmedRequestId = uuid();
+      const syncResumeStartMessage = {
+        requestId: preconfirmedRequestId,
+        type: 'sync-resume-start',
+        payload: {
+          type: 'other',
+        },
+      };
+      Promise.resolve(
+        browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
+      );
+      const confirmed = await waitForSyncMessage(
+        details.tabId,
+        tabsObject,
+        true,
+        preconfirmedRequestId
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
     // 必须的延迟，否则会出错
     await delay(1000);
     const originalHeaders =
@@ -2611,7 +2637,15 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     const _replayResponse = await request(details.url, opt);
     const replayResponse = await _replayResponse.json();
     requestsHeaderMap.delete(details.requestId);
-    return { details, replayResponse, headers };
+    return {
+      details: {
+        ...details,
+        preconfirmed,
+        preconfirmedRequestId,
+      },
+      replayResponse,
+      headers,
+    };
   }),
   // tap(({ details }) => {
   //   console.log('重放器执行重放完成', details.url);
@@ -3178,6 +3212,37 @@ const htmlSync$ = message$.pipe(
   mergeMap(async ([message, user]) => {
     const url = message.message.payload.url;
     const tabId = message.sender.tab.id;
+    // 手动模式下：先等待用户确认，再生成简历数据
+    if (wait) {
+      const requestId = uuid();
+      const syncResumeStartMessage = {
+        requestId: requestId,
+        type: 'sync-resume-start',
+        payload: {
+          type: 'other',
+        },
+      };
+      Promise.resolve(browser.tabs.sendMessage(tabId, syncResumeStartMessage));
+      const confirmed = await waitForSyncMessage(
+        tabId,
+        tabsObject,
+        true,
+        requestId
+      );
+      if (!confirmed) {
+        return;
+      }
+      const details = {
+        url,
+        tabId,
+        html: message.message.payload.html,
+        preconfirmed: true,
+        preconfirmedRequestId: requestId,
+      };
+      const headers = {};
+      const body = {};
+      return { details, headers, body };
+    }
     const details = {
       url,
       tabId,
@@ -3355,27 +3420,31 @@ mergedResume$
     }),
     mergeMap(([data, user]) => {
       const { details, headers, body } = data;
-      const requestId = uuid();
-      const syncResumeStartMessage = {
-        requestId: requestId,
-        type: 'sync-resume-start',
-        payload: {
-          type: 'other',
-        },
-      };
-      Promise.resolve(
-        browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
-      );
+      const requestId = details?.preconfirmedRequestId || uuid();
+      if (!details?.preconfirmed) {
+        const syncResumeStartMessage = {
+          requestId: requestId,
+          type: 'sync-resume-start',
+          payload: {
+            type: 'other',
+          },
+        };
+        Promise.resolve(
+          browser.tabs.sendMessage(details.tabId, syncResumeStartMessage)
+        );
+      }
       return of({ data, user, requestId }).pipe();
     }),
     mergeMap(async ({ data, user, requestId }) => {
-      // 等待用户确认
-      const confirmed = await waitForSyncMessage(
-        data.details.tabId,
-        tabsObject,
-        wait,
-        requestId
-      );
+      // 等待用户确认（如果入口处已经确认过，则跳过）
+      const confirmed = data.details?.preconfirmed
+        ? true
+        : await waitForSyncMessage(
+            data.details.tabId,
+            tabsObject,
+            wait,
+            requestId
+          );
       // 返回原始数据和确认结果
       return { data, user, confirmed };
     }),
