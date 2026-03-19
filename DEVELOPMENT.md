@@ -68,3 +68,16 @@ npm run format:check
 - `eslint.config.js` - ESLint 规则配置
 - `.prettierrc` - Prettier 格式化规则
 - `.prettierignore` - Prettier 忽略文件
+
+# ========================================
+# 环境变量说明（新前端 app.mesoor.com 专用配置）
+# ========================================
+# VITE_DOMAIN_HOST: 系统后端域名，用于 token/storage 初始化（browser.storage.local.env 的默认值）
+# VITE_FRONTEND_HOST: 前端跳转域名，实体详情页所在 host（优先级高于 VITE_DOMAIN_HOST）
+#   - 此配置使用 app.mesoor.com（新前端）
+# VITE_ENTITY_ROUTE_MODE: 实体详情页路由模式
+#   - legacy_query: 旧规则 /entity/{openId}?type={entityType}
+#   - app_path: 新前端规则 /entity/{entityType}/{openId}
+#   - 此配置使用 app_path（新前端路由）
+#   - 客户本地部署建议显式配置，不要依赖 host 推断
+# ========================================

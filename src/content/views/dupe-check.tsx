@@ -13,6 +13,7 @@ import { filter } from 'rxjs/operators';
 import { v4 as uuid } from 'uuid';
 import browser from 'webextension-polyfill';
 import { env$, wait$ } from '../../models/preference';
+import { buildEntityDetailUrl } from '../../utils/mesoor-entity-url';
 import {
   IDupeCheckTriggerMessage,
   ISyncResumeBaseConfig,
@@ -260,12 +261,14 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     resetState({ isCheckingDupe: true });
     const { openId, tenant } = state;
 
+    if (!openId || !tenant) return;
+
     const msg: IDupeCheckTriggerMessage = {
       requestId: uuid(),
       type: 'dupe-check-trigger',
       payload: {
-        openId: openId!,
-        tenant: tenant!,
+        openId,
+        tenant,
       },
     };
 
@@ -338,7 +341,12 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       }
 
       // 企业版跳转到简历详情页
-      const url = `https://${env}/entity/${openId}?type=${entityType}`;
+      if (!openId) return;
+      const url = buildEntityDetailUrl({
+        host: env,
+        entityType,
+        openId,
+      });
       window.open(url);
       return;
     }

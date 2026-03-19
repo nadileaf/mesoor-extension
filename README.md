@@ -31,6 +31,9 @@ pnpm build --mode development
 # 生产环境热重载
 pnpm dev:production
 pnpm build --mode production
+
+pnpm dev:app-production
+pnpm build --mode app-production
 ```
 
 3. Open Chrome and navigate to `chrome://extensions/`, enable "Developer mode", and load the unpacked extension from the `dist` directory.

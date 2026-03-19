@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_BACKGROUND_SERVER_HOST: string;
   readonly VITE_TOKEN_HOST: string;
   readonly VITE_SPACE_SERVER: string;
+  readonly VITE_ENTITY_ROUTE_MODE?: 'legacy_query' | 'app_path';
+  readonly VITE_FRONTEND_HOST?: string;
 }
 
 interface ImportMeta {
