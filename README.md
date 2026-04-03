@@ -31,7 +31,10 @@ pnpm build --mode development
 # 生产环境热重载
 pnpm dev:production
 pnpm build --mode production
-
+# app-test
+pnpm dev:app-development
+pnpm build:app-development
+# app-mesoor
 pnpm dev:app-production
 pnpm build --mode app-production
 ```

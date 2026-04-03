@@ -318,7 +318,7 @@ const needCacheHeadersUrl = [
   // 51job发起chat请求
   '*://cupid.51job.com/open/im/ehire/chat-detail*',
   // 智联招聘沟通页获取聊天信息
-  // '*://rd6.zhaopin.com/api/im/session/detail*',
+  '*://rd6.zhaopin.com/api/im/session/detail*',
   // 猎聘城猎通-职位编辑页-职位信息
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
   // 58同城-简历详情
@@ -2180,24 +2180,38 @@ async function getTokenFromCookie() {
 
 // 当用户触发Dify AI-Source的链接时里的Get请求时是没带token的，
 // 所以需要在请求发送前的事件中添加token重放请求
+// 动态构建监听的 URL 列表，支持自定义 host
+const actionConfigHost = import.meta.env.VITE_ACTION_CONFIG_HOST || 'web-extension-use.mesoor.com';
+// webRequest 的 URL 模式不支持 host:port 格式，需要特殊处理
+const actionConfigUrls = actionConfigHost.includes(':')
+  ? [
+      // localhost 需要使用 <all_urls> 然后在回调中过滤
+      '*://localhost/v1/actions/configs/id*',
+      'http://localhost/v1/actions/configs/id*',
+    ]
+  : [`*://${actionConfigHost}/v1/actions/configs/id*`];
+
 browser.webRequest.onBeforeRequest.addListener(
   details => {
     // 只处理来自标签页的GET请求
     if (details.tabId !== -1 && details.method === 'GET') {
+      // 如果配置了带端口的 host（如 localhost:8080），需要额外检查 URL 是否匹配
+      if (actionConfigHost.includes(':')) {
+        const url = new URL(details.url);
+        const expectedHost = actionConfigHost.split(':')[0];
+        const expectedPort = actionConfigHost.split(':')[1];
+        if (url.hostname !== expectedHost || url.port !== expectedPort) {
+          return; // URL 不匹配，跳过
+        }
+      }
+      
       (async () => {
         try {
           // 直接从 cookie 中获取 token
           const token = await getTokenFromCookie();
 
           if (token) {
-            const url = new URL(details.url);
-
-            // 如果是 localhost 且没有端口，则补上 8080 端口
-            if (url.hostname === 'localhost' && !url.port) {
-              url.port = '8080';
-            }
-
-            const response = await fetch(url.toString(), {
+            const response = await fetch(details.url, {
               method: 'GET',
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -2219,11 +2233,7 @@ browser.webRequest.onBeforeRequest.addListener(
     }
   },
   {
-    urls: [
-      '*://web-extension-use.mesoor.com/v1/actions/configs/id*',
-      '*://web-extension-use.nadileaf.com/v1/actions/configs/id*',
-      '*://localhost/v1/actions/configs/id*',
-    ],
+    urls: actionConfigUrls,
   }
 );
 
@@ -3531,6 +3541,13 @@ mergedResume$
           return;
         }
         const syncEntityResponseData = await syncEntityResponse.json();
+        
+        // 如果服务器返回 pass: true，表示跳过此次同步（如非主实体），静默返回不提示
+        if (syncEntityResponseData.pass === true) {
+          console.log('服务器返回 pass=true，跳过同步:', syncEntityResponseData.msg);
+          return;
+        }
+        
         const { openId, entityType, tenantId } = syncEntityResponseData.data;
         await waitForResumeSyncResult(
           details.tabId,
