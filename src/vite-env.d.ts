@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_FRONTEND_HOST?: string;
   readonly VITE_LOCALHOST_API_HOST?: string;
   readonly VITE_ACTION_CONFIG_HOST?: string;
+  readonly VITE_UPDATE_CDN_BASE_URL: string;
+  readonly VITE_SOURCING_AGENT_URL: string;
 }
 
 interface ImportMeta {

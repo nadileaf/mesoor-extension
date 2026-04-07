@@ -95,7 +95,8 @@ async function createIframe(input: Record<string, any>) {
     ...input, // 直接使用原始input数据
   });
 
-  const iframeUrl = `https://agent.mesoor.com/chat/uo6f9m16c0ymkBTR?${params}`;
+  const agentUrl = import.meta.env.VITE_SOURCING_AGENT_URL;
+  const iframeUrl = `${agentUrl}?${params}`;
 
   if (iframeUrl.length > 2048) {
     console.error('URL过长，请减少输入数量以防止机器人加载失败');

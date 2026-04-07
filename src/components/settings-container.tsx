@@ -32,7 +32,7 @@ interface VersionInfo {
 }
 
 async function queryVersion() {
-  const baseUrl = 'https://cdn-fe.mesoor.com/tip-plugins/mesoor/';
+  const baseUrl = import.meta.env.VITE_UPDATE_CDN_BASE_URL;
   const versionUrl = baseUrl + 'version.json';
 
   let versionData: { version: string; file: string };

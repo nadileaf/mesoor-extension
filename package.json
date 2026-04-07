@@ -1,7 +1,7 @@
 {
   "name": "mesoor-extention",
   "type": "module",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -10,9 +10,11 @@
     "dev:localhost": "vite --mode localhost",
     "dev:app-production": "vite --mode app-production",
     "dev:app-development": "vite --mode app-development",
-    "build": "tsc -b && vite build",
     "build:app-production": "tsc -b && vite build --mode app-production",
     "build:app-development": "tsc -b && vite build --mode app-development",
+    "dev:cgl-production": "vite --mode cgl-production",
+    "build": "tsc -b && vite build",
+    "build:cgl-production": "tsc -b && vite build --mode cgl-production",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 150",
     "lint:fix": "eslint . --ext ts,tsx --fix",

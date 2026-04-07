@@ -21,11 +21,18 @@ export const parseJwt = (token: string): TipUser => {
 
 /**
  * 根据URL获取对应的域名
- * @param url 原始URL
- * @returns 处理后的域名，带前导点
+ * @param url 原始URL（可以包含协议，如 https://rencaigeili.com）
+ * @returns 处理后的域名，带前导点（如 .rencaigeili.com）
  */
 export const getDomain = (url: string): string => {
-  const urlSplited: string[] = url.split('.');
+  // 移除协议部分（http:// 或 https://）
+  let domain = url.replace(/^https?:\/\//, '');
+  // 移除路径部分（如果有）
+  domain = domain.split('/')[0];
+  // 移除端口号（如果有）
+  domain = domain.split(':')[0];
+
+  const urlSplited: string[] = domain.split('.');
   urlSplited.reverse();
   const domainArray: string[] = urlSplited.slice(0, 2);
   domainArray.reverse();

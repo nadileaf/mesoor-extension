@@ -27,6 +27,7 @@ export default defineManifest({
     '<all_urls>',
     '*://*.mesoor.com/*',
     '*://*.nadileaf.com/*',
+    '*://*.rencaigeili.com/*',
   ],
   action: {
     default_icon: {
