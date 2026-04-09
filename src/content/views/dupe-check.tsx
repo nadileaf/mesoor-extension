@@ -51,6 +51,11 @@ interface ModernDupeCheckState {
   isConfirmSynchronize: boolean;
   requestId?: string;
   entityType: 'Resume' | 'Job';
+  // 可选：后端提供的跳转信息
+  redirect?: {
+    url: string;
+    text: string;
+  };
 }
 
 // 确认同步消息接口
@@ -76,7 +81,11 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       location.href.includes('zhipin.com') ||
       location.href.includes('maimai.cn') ||
       (location.href.includes('rd6.zhaopin.com') &&
-        !location.href.includes('rd6.zhaopin.com/resume/detail')) ||
+        !location.href.includes('rd6.zhaopin.com/resume/detail') &&
+        !(
+          location.href.includes('rd6.zhaopin.com/job/publish') &&
+          location.href.includes('jobNumber=')
+        )) ||
       location.href.includes('xiaoyuan.zhaopin.com') ||
       location.href.includes('passport.zhaopin.com') ||
       location.href.includes('58.com') ||
@@ -187,23 +196,27 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       return wait
         ? isConfirmSynchronize
           ? `正在同步...`
-          : `同步该简历?`
+          : `点击同步${entityTypeMap[state.entityType]}`
         : `正在同步...`;
     }
 
-    if (isCheckingDupe) return '正在检查...';
-    if (isDupeCheckError) return '检查失败, 点击重试';
+    if (isDupeCheckError) {
+      return '查重失败，点击重试';
+    }
 
-    if (isChecked) {
-      if (dupeCheckResult === false) {
-        return isPersonalPlug
-          ? '不存在重复简历'
-          : '不存在重复简历, 点击查看召乎上简历';
-      } else {
-        return isPersonalPlug
-          ? '存在重复简历'
-          : '存在重复简历, 点击查看召乎上简历';
-      }
+    if (isCheckingDupe) {
+      return '正在查重...';
+    }
+
+    if (isChecked && !isNil(dupeCheckResult)) {
+      return dupeCheckResult
+        ? `查重完成，点击查看${entityTypeMap[state.entityType]}`
+        : `查重完成，点击查看${entityTypeMap[state.entityType]}`;
+    }
+
+    // 优先使用后端返回的文案，否则使用默认文案
+    if (state.redirect?.text) {
+      return state.redirect.text;
     }
 
     return `同步完成，点击查看${entityTypeMap[state.entityType]}`;
@@ -332,6 +345,13 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
     // 同步完成后的跳转逻辑
     if (isSynchronized && !isSyncResumeError && !isCheckingDupe && !isChecked) {
+      // 优先使用后端返回的跳转 URL
+      if (state.redirect?.url) {
+        window.open(state.redirect.url);
+        return;
+      }
+
+      // 降级到前端构建的跳转逻辑
       if (isPersonalPlug) {
         const secondaryDomain = 'mesoor.com';
         window.open(

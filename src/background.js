@@ -3542,13 +3542,21 @@ mergedResume$
         }
         const syncEntityResponseData = await syncEntityResponse.json();
         
-        // 如果服务器返回 pass: true，表示跳过此次同步（如非主实体），静默返回不提示
+        // 如果服务器返回 pass: true，表示跳过此次同步（如非主实体）
         if (syncEntityResponseData.pass === true) {
           console.log('服务器返回 pass=true，跳过同步:', syncEntityResponseData.msg);
+          
+          // 如果提供了 redirect 信息，则显示提示；否则静默跳过
+          if (syncEntityResponseData.data?.redirect) {
+            const { redirect } = syncEntityResponseData.data;
+            syncResumeFeedbackMsg.payload.isSyncResumeError = false;
+            syncResumeFeedbackMsg.payload.redirect = redirect;
+            browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+          }
           return;
         }
         
-        const { openId, entityType, tenantId } = syncEntityResponseData.data;
+        const { openId, entityType, tenantId, redirect } = syncEntityResponseData.data;
         await waitForResumeSyncResult(
           details.tabId,
           openId,
@@ -3559,6 +3567,10 @@ mergedResume$
         syncResumeFeedbackMsg.payload.openId = openId;
         syncResumeFeedbackMsg.payload.tenant = tenantId;
         syncResumeFeedbackMsg.payload.entityType = entityType;
+        // 如果后端返回了 redirect 信息，传递给前端
+        if (redirect) {
+          syncResumeFeedbackMsg.payload.redirect = redirect;
+        }
         browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
         return { syncEntityResponse, openId, entityType, tenantId };
       } catch (error) {

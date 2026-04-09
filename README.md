@@ -37,6 +37,8 @@ pnpm build:app-development
 # app-mesoor
 pnpm dev:app-production
 pnpm build --mode app-production
+
+pnpm build:app-cgl
 ```
 
 3. Open Chrome and navigate to `chrome://extensions/`, enable "Developer mode", and load the unpacked extension from the `dist` directory.
