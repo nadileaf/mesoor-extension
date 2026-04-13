@@ -43,7 +43,10 @@ pnpm build:app-production
 # App CGL 环境 (app-cgl)
 pnpm dev:app-cgl
 pnpm build:app-cgl
-mesoor-extention-for-cgl-app
+
+# Tip CGL 环境 (tip-cgl)
+pnpm dev:tip-cgl
+pnpm build:tip-cgl
 ```
 
 3. Open Chrome and navigate to `chrome://extensions/`, enable "Developer mode", and load the unpacked extension from the `dist` directory.
