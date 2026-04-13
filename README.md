@@ -21,24 +21,29 @@ npm install
 2. Start development server:
 
 ```bash
-# 本地环境热重载
+# 本地环境 (localhost)
 pnpm dev:localhost
 
-# 开发环境热重载
+# Tip 开发环境 (development)
 pnpm dev:develop
 pnpm build --mode development
 
-# 生产环境热重载
+# Tip 生产环境 (production)
 pnpm dev:production
 pnpm build --mode production
-# app-test
+
+# App 开发环境 (app-development)
 pnpm dev:app-development
 pnpm build:app-development
-# app-mesoor
-pnpm dev:app-production
-pnpm build --mode app-production
 
+# App 生产环境 (app-production)
+pnpm dev:app-production
+pnpm build:app-production
+
+# App CGL 环境 (app-cgl)
+pnpm dev:app-cgl
 pnpm build:app-cgl
+mesoor-extention-for-cgl-app
 ```
 
 3. Open Chrome and navigate to `chrome://extensions/`, enable "Developer mode", and load the unpacked extension from the `dist` directory.

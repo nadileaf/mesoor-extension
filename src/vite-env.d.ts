@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_ACTION_CONFIG_HOST?: string;
   readonly VITE_UPDATE_CDN_BASE_URL: string;
   readonly VITE_SOURCING_AGENT_URL: string;
+  readonly VITE_ENABLE_SOURCING_CHAT?: string;
+  readonly VITE_ICON_PATH?: string;
 }
 
 interface ImportMeta {

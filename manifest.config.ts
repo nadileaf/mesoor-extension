@@ -1,12 +1,17 @@
 import { defineManifest } from '@crxjs/vite-plugin';
 import pkg from './package.json';
 
+const iconPath = process.env.VITE_ICON_PATH || 'public/logo.png';
+console.log('📦 VITE_ICON_PATH:', process.env.VITE_ICON_PATH);
+console.log('📦 Using icon:', iconPath);
+
 export default defineManifest({
   manifest_version: 3,
   name: pkg.name,
   version: pkg.version,
   icons: {
-    48: 'public/logo.png',
+    // @ts-expect-error - CRXJS defineManifest 类型定义不支持动态路径，但运行时正常工作
+    48: iconPath,
   },
   permissions: [
     'activeTab',
@@ -31,7 +36,8 @@ export default defineManifest({
   ],
   action: {
     default_icon: {
-      48: 'public/logo.png',
+      // @ts-expect-error - CRXJS defineManifest 类型定义不支持动态路径，但运行时正常工作
+      48: iconPath,
     },
     // default_popup: "src/popup/index.html", // 使用side panel
   },

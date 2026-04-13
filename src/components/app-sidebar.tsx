@@ -11,7 +11,6 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { Bot, Settings } from 'lucide-react';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { TabType } from '../sidebar/App';
 
 interface AppSidebarProps {
@@ -20,12 +19,19 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
+  const enableSourcingChat =
+    import.meta.env.VITE_ENABLE_SOURCING_CHAT !== 'false';
+
   const navItems = [
-    {
-      id: 'Sourcing' as TabType,
-      icon: Bot,
-      label: 'AI Sourcing',
-    },
+    ...(enableSourcingChat
+      ? [
+          {
+            id: 'Sourcing' as TabType,
+            icon: Bot,
+            label: 'AI Sourcing',
+          },
+        ]
+      : []),
     {
       id: 'settings' as TabType,
       icon: Settings,

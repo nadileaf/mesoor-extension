@@ -7,7 +7,11 @@ import Layout from './layout';
 export type TabType = 'Sourcing' | 'settings';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('Sourcing');
+  const enableSourcingChat =
+    import.meta.env.VITE_ENABLE_SOURCING_CHAT !== 'false';
+  const [activeTab, setActiveTab] = useState<TabType>(
+    enableSourcingChat ? 'Sourcing' : 'settings'
+  );
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
