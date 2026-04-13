@@ -1,6 +1,5 @@
 import { combineLatest, concat, from, timer } from 'rxjs';
 import {
-  concatAll,
   distinctUntilChanged,
   filter,
   map,
@@ -41,30 +40,57 @@ export const env$ = concat(fromStorage$, envChange$).pipe(shareReplay(1));
 // 所以user流里的返回值有着较大缺陷(distinctUntilChanged不会让你重复触发连续一样的流的值)，只有在刚安装插件时才奏效，一旦登录过后，退出登录后仍可继续使用直至浏览器完全退出(进程全部结束)。
 // 如果想要修改这个，加一个新流和一个新的storage，在cookiechange的时候查询所有相关cookie，少了一个就设置这个storage，同时socket$流combineLast里面多加入一个流即可。
 export const user$ = env$.pipe(
-  switchMap(env => {
-    // const domain = getDomain(env!);
+  switchMap(_env => {
     const domain = getDomain(import.meta.env.VITE_TOKEN_HOST);
     const getCookies = browser.cookies.getAll({ domain });
-    return concat(from(getCookies).pipe(concatAll()), onCookiesChange$(domain));
+    return concat(
+      from(getCookies).pipe(
+        // 将所有 cookies 收集到数组中
+        map(cookies => cookies.filter(c => c.name === 'token')),
+        // 解析所有 token 并按 iat 时间戳排序，取最新的
+        map(tokenCookies => {
+          if (tokenCookies.length === 0) return [];
+
+          const parsedTokens = tokenCookies.map(cookie => {
+            let decodedValue = decodeURIComponent(cookie.value);
+            try {
+              decodedValue = JSON.parse(decodedValue);
+            } catch (_e) {
+              // 解析失败，使用原值
+            }
+            const parsed = parseJwt(decodedValue);
+            return {
+              cookie,
+              parsed,
+              token: decodedValue,
+              iat: parsed.iat || 0,
+            };
+          });
+
+          // 按 iat 降序排序，取最新的
+          parsedTokens.sort((a, b) => b.iat - a.iat);
+          return parsedTokens.length > 0 ? [parsedTokens[0].cookie] : [];
+        }),
+        // 展开数组
+        switchMap(cookies => from(cookies))
+      ),
+      onCookiesChange$(domain).pipe(filter(cookie => cookie.name === 'token'))
+    );
   }),
-  filter(cookie => ['token'].includes(cookie.name)),
   scan((user: Partial<TipUser>, cookie: Cookies.Cookie) => {
-    const { name, value } = cookie;
+    const { value } = cookie;
     let decodedValue = decodeURIComponent(value);
 
     try {
       decodedValue = JSON.parse(decodedValue);
-    } catch (e) {}
+    } catch (_e) {
+      // 解析失败，使用原值
+    }
     const tipUser = {
       ...parseJwt(decodedValue),
       token: decodedValue,
     };
-    switch (name) {
-      case 'token':
-        return { ...user, ...tipUser };
-      default:
-        return user;
-    }
+    return { ...user, ...tipUser };
   }, {}),
   filter(isUser),
   distinctUntilChanged((pre: TipUser, cur: TipUser) => pre.token === cur.token),

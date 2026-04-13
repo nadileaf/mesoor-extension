@@ -2,8 +2,6 @@ import { defineManifest } from '@crxjs/vite-plugin';
 import pkg from './package.json';
 
 const iconPath = process.env.VITE_ICON_PATH || 'public/logo.png';
-console.log('📦 VITE_ICON_PATH:', process.env.VITE_ICON_PATH);
-console.log('📦 Using icon:', iconPath);
 
 export default defineManifest({
   manifest_version: 3,
