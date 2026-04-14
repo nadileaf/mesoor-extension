@@ -35,7 +35,7 @@ import {
 // 导入user流
 import { user$ } from './models/user.ts';
 // import { env$ } from "./models/user.ts";
-import { wait$, preferences$ } from './models/preference.ts';
+import { wait$, preferences$, linkedInEmailWait$ } from './models/preference.ts';
 import { message$ } from './models/stream.ts';
 import { delay } from './utils/index.ts';
 import { findValueByKey } from './utils/json-utils.ts';
@@ -109,10 +109,20 @@ browser.runtime.onInstalled.addListener(async detail => {
     await browser.storage.sync.set({ wait: { isSyncWait: false } });
   }
 
+  if (!storage.linkedInEmailWait) {
+    // isEmailWait 为 false 是自动弹出邮件框
+    await browser.storage.sync.set({ linkedInEmailWait: { isEmailWait: false } });
+  }
+
   await browser.storage.local.set({ env: defaultEnv, activities: {} });
   console.log('on install setting success...');
 });
 wait$.subscribe(waitState => (wait = waitState.isSyncWait));
+
+let linkedInEmailWait = false;
+linkedInEmailWait$.subscribe(
+  waitState => (linkedInEmailWait = waitState.isEmailWait)
+);
 
 // 加载网站拦截规则
 let apiConfig = {
@@ -1959,7 +1969,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer app-0ZlQjjuIWhJLVDYyxz2EEl8n',
+        Authorization: `Bearer ${import.meta.env.VITE_DIFY_JOB_CHECK_API_KEY}`,
       },
       body: JSON.stringify(requestBody),
     })
@@ -2014,7 +2024,10 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
 
     return true; // 异步响应需要返回true
-  } else if (request.type === 'view-resume-send-mail') {
+  } else if (
+    request.type === 'view-resume-send-mail' ||
+    request.type === 'linkedin-email-generate'
+  ) {
     console.log('处理发送邮件', JSON.stringify(request));
     const match = request.payload.url.match(/profile\/([^?&]+)/);
     let profileId = '';
@@ -2060,7 +2073,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           // 中文优先必加
           'x-li-lang': 'zh_CN',
         };
-        const _url = `http://www.linkedin.com/talent/api/talentLinkedInMemberProfiles/urn:li:ts_linkedin_member_profile:(${profileId},1,urn:li:ts_hiring_project:0)`;
+        const _url = `https://www.linkedin.com/talent/api/talentLinkedInMemberProfiles/urn:li:ts_linkedin_member_profile:(${profileId},1,urn:li:ts_hiring_project:0)`;
         const requestData =
           'altkey=urn&decoration=(entityUrn%2CcurrentResumePosition%2CreferenceUrn%2Canonymized%2CunobfuscatedFirstName%2CunobfuscatedLastName%2CmemberPreferences(availableStartingAt%2Clocations%2CgeoLocations*~(standardGeoStyleName)%2CopenToNewOpportunities%2Ctitles%2CinterestedCandidateIntroductionStatement%2Cindustries*~%2CcompanySizeRange%2CemploymentTypes%2Cbenefits%2Cschedules%2CsalaryLowerBounds%2Ccommute%2CjobSeekingUrgencyLevel%2CopenToWorkRemotely%2ClocalizedWorkplaceTypes%2CremoteGeoLocationUrns*~(standardGeoStyleName)%2CsegmentAttributeGroups*(attributeUrn~(localizedName)%2CattributeValueUrns*~(localizedName)))%2CfirstName%2ClastName%2Cheadline%2Clocation%2CprofilePicture%2CvectorProfilePicture%2CnumConnections%2Csummary%2CnetworkDistance%2CprofileSkills*(name%2CtopSkill%2CtopVoiceBadge%2CskillAssessmentBadge%2CprofileResume%2CendorsementCount%2CprofileSkillAssociationsGroupUrn~(entityUrn%2Cassociations*(description%2Ctype%2CorganizationUrn~(name%2Curl%2Clogo)))%2ChasInsight)%2CpublicProfileUrl%2CcontactInfo%2Cwebsites*%2CcanSendInMail%2Cunlinked%2CunLinkedMigrated%2Chighlights(connections(connections*~(entityUrn%2CfirstName%2ClastName%2Cheadline%2CprofilePicture%2CvectorProfilePicture%2CpublicProfileUrl%2CfollowerCount%2CnetworkDistance%2CautomatedActionProfile)%2CtotalCount)%2Ccompanies(companies*(company~(followerCount%2Cname)%2CoverlapInfo))%2Cschools(schools*(school~(name)%2CschoolOrganizationUrn~(name)%2CoverlapInfo)))%2Ceducations*(school~(name)%2CorganizationUrn~(name)%2CschoolName%2Cgrade%2Cdescription%2CdegreeName%2CfieldOfStudy%2CstartDateOn%2CendDateOn)%2CgroupedWorkExperience*(companyUrn~(followerCount%2Cname)%2Cpositions*(profileResume%2Ctitle%2CstartDateOn%2CendDateOn%2Cdescription%2Clocation)%2CstartDateOn%2CendDateOn)%2CvolunteeringExperiences*(company~(followerCount%2Cname)%2CcompanyName%2Crole%2CstartDateOn%2CendDateOn%2Cdescription)%2Crecommendations*(recommender~(entityUrn%2CfirstName%2ClastName%2Cheadline%2CprofilePicture%2CvectorProfilePicture%2CpublicProfileUrl%2CfollowerCount%2CnetworkDistance%2CautomatedActionProfile)%2CrecommendationText%2Crelationship%2Ccreated)%2Caccomplishments(projects*(title%2Cdescription%2CstartDateOn%2CendDateOn%2CsingleDate%2Ccontributors*(name%2ClinkedInMember~(entityUrn%2Canonymized%2CunobfuscatedFirstName%2CunobfuscatedLastName%2CfirstName%2ClastName%2Cheadline%2CprofilePicture%2CvectorProfilePicture%2CpublicProfileUrl%2CfollowerCount%2CnetworkDistance%2CautomatedActionProfile)))%2Ccourses*%2Clanguages*%2Cpublications*(name%2Cpublisher%2Cdescription%2CdateOn%2Cauthors*(name%2ClinkedInMember~(entityUrn%2Canonymized%2CunobfuscatedFirstName%2CunobfuscatedLastName%2CfirstName%2ClastName%2Cheadline%2CprofilePicture%2CvectorProfilePicture%2CpublicProfileUrl%2CfollowerCount%2CnetworkDistance%2CautomatedActionProfile)))%2Cpatents*(number%2CapplicationNumber%2Ctitle%2Cissuer%2Cpending%2Curl%2CfilingDateOn%2CissueDateOn%2Cdescription%2Cinventors*(name%2ClinkedInMember~(entityUrn%2Canonymized%2CunobfuscatedFirstName%2CunobfuscatedLastName%2CfirstName%2ClastName%2Cheadline%2CprofilePicture%2CvectorProfilePicture%2CpublicProfileUrl%2CfollowerCount%2CnetworkDistance%2CautomatedActionProfile)))%2CtestScores*%2Chonors*%2Ccertifications*(name%2ClicenseNumber%2Cauthority%2Ccompany~(followerCount%2Cname)%2Curl%2CstartDateOn%2CendDateOn))%2ClegacyCapAuthToken%2CfullProfileNotVisible%2CcurrentPositions*(company~(followerCount%2Cname%2Curl%2CvectorLogo)%2CcompanyName%2Ctitle%2CstartDateOn%2CendDateOn%2Cdescription%2Clocation)%2CindustryName%2ChasProfileVerifications)';
 
@@ -2079,12 +2092,12 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           };
           console.info('background running -> resume:', linkedinResume);
           const _converted = await fetch(
-            'http://effex-configs.mesoor.com/v1/configs/invoke',
+            import.meta.env.VITE_EFFEX_CONFIGS_URL,
             {
-              headers: {
-                'Content-Type': 'application/json',
-                // 'Authorization': `Bearer ${user.token}`,
-              },
+            headers: {
+              'Content-Type': 'application/json',
+              // 'Authorization': `Bearer ${user.token}`,
+            },
               body: JSON.stringify({
                 config_id: 'standard-convert-LinkedInPC_to_resume-public',
                 data: { data: linkedinResume },
@@ -2103,11 +2116,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           console.info('resume-converted:', resume);
 
           const getInMail = await fetch(
-            'https://agent.mesoor.com/v1/workflows/run',
+            import.meta.env.VITE_DIFY_LINKEDIN_EMAIL_HOST,
             {
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: 'Bearer app-Omm8AOuKndljipT74AExVKM1',
+                Authorization: `Bearer ${import.meta.env.VITE_DIFY_LINKEDIN_EMAIL_API_KEY}`,
               },
               body: JSON.stringify({
                 inputs: {
@@ -2135,7 +2148,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
               jobdesc: request.payload.jobdesc,
               consultant: request.payload.consultant,
               tone: request.payload.tone,
-              link: request.payload.link || '',
+              link: request.payload.url || '',
               confidential: request.payload.confidential,
               profileId: profileId,
             },

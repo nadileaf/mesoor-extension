@@ -24,6 +24,7 @@ declare global {
 interface SettingsState {
   autoSync: boolean;
   enableSocketConnection: boolean;
+  autoLinkedInEmail: boolean;
 }
 
 interface VersionInfo {
@@ -93,6 +94,7 @@ const SettingsContainer: React.FC = () => {
   const [settings, setSettings] = useState<SettingsState>({
     autoSync: false,
     enableSocketConnection: true,
+    autoLinkedInEmail: false,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [latestVersion, setLatestVersion] = useState<VersionInfo | null>(null);
@@ -124,12 +126,14 @@ const SettingsContainer: React.FC = () => {
         const result = await (window as any).browser?.storage?.sync?.get([
           'wait',
           'preferences',
+          'linkedInEmailWait',
         ]);
 
         if (result) {
           setSettings({
             autoSync: !result.wait?.isSyncWait,
             enableSocketConnection: !result.preferences?.disabled,
+            autoLinkedInEmail: !result.linkedInEmailWait?.isEmailWait,
           });
         }
       } catch (error) {
@@ -146,16 +150,18 @@ const SettingsContainer: React.FC = () => {
   const saveSettings = async (newSettings: SettingsState) => {
     const isSyncWait = !newSettings.autoSync;
     const preferences = { disabled: !newSettings.enableSocketConnection };
+    const linkedInEmailWait = { isEmailWait: !newSettings.autoLinkedInEmail };
     try {
       // 更新preferences中的disabled属性
       await (window as any).browser?.storage?.sync?.set({
         wait: { isSyncWait },
         preferences: preferences,
+        linkedInEmailWait: linkedInEmailWait,
       });
       setSettings(newSettings);
       const wait = await (window as any).browser?.storage?.sync?.get(['wait']);
       console.log('wait', wait);
-      console.log('设置已保存', preferences);
+      console.log('设置已保存', { preferences, linkedInEmailWait });
     } catch (error) {
       console.error('Failed to save settings:', error);
     }
@@ -327,6 +333,22 @@ const SettingsContainer: React.FC = () => {
               <Switch
                 checked={settings.enableSocketConnection}
                 onCheckedChange={() => handleToggle('enableSocketConnection')}
+              />
+            </div>
+
+            {/* 领英邮件自动生成开关 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-base font-medium text-foreground">
+                  领英邮件自动生成
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  在 LinkedIn Recruiter 页面点击给候选人发消息时自动生成邮件
+                </div>
+              </div>
+              <Switch
+                checked={settings.autoLinkedInEmail}
+                onCheckedChange={() => handleToggle('autoLinkedInEmail')}
               />
             </div>
 

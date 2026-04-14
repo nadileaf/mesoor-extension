@@ -13,6 +13,10 @@ interface ImportMetaEnv {
   readonly VITE_SOURCING_AGENT_URL: string;
   readonly VITE_ENABLE_SOURCING_CHAT?: string;
   readonly VITE_ICON_PATH?: string;
+  readonly VITE_EFFEX_CONFIGS_URL: string;
+  readonly VITE_DIFY_JOB_CHECK_API_KEY: string;
+  readonly VITE_DIFY_LINKEDIN_EMAIL_API_KEY: string;
+  readonly VITE_DIFY_LINKEDIN_EMAIL_HOST: string;
 }
 
 interface ImportMeta {

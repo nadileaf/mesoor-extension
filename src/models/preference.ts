@@ -68,6 +68,29 @@ export const wait$ = concat(waitStateFromLocalStorage$, waitStateChange$).pipe(
   shareReplay(1)
 );
 
+// linkedInEmailWait$
+const linkedInEmailWaitFromStorage$ = from(
+  safeStorageGet('sync', 'linkedInEmailWait')
+).pipe(
+  filter(storage => !!storage.linkedInEmailWait),
+  map(storage => storage.linkedInEmailWait!),
+  catchError(error => {
+    console.error('Error getting linkedInEmailWait from storage:', error);
+    return of(null);
+  }),
+  filter(Boolean)
+);
+
+const linkedInEmailWaitChange$ = syncstorageChange$.pipe(
+  filter(([change]) => !!change.linkedInEmailWait),
+  map(([change]) => change.linkedInEmailWait!.newValue)
+);
+
+export const linkedInEmailWait$ = concat(
+  linkedInEmailWaitFromStorage$,
+  linkedInEmailWaitChange$
+).pipe(shareReplay(1));
+
 const loginStateFromLocalStorage$ = from(
   safeStorageGet('local', 'loginState')
 ).pipe(

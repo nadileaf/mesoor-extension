@@ -45,6 +45,10 @@ export interface WaitState {
   isSyncWait: boolean;
 }
 
+export interface LinkedInEmailWaitState {
+  isEmailWait: boolean;
+}
+
 // tslint:disable-next-line:max-line-length
 export type SyncStorage = {
   preferences?: Preferences;
@@ -52,6 +56,7 @@ export type SyncStorage = {
   syncparams?: SyncParams;
   syncConfig?: SyncConfig;
   wait?: WaitState;
+  linkedInEmailWait?: LinkedInEmailWaitState;
 };
 // tslint:disable-next-line:max-line-length
 export type LocalStorage = {

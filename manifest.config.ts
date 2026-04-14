@@ -91,6 +91,15 @@ export default defineManifest({
       js: ['src/content/sync-html.ts'],
     },
     {
+      matches: [
+        '*://www.linkedin.com/talent/search*',
+        '*://www.linkedin.com/talent/hire/*/discover/recruiterSearch*',
+        '*://www.linkedin.com/talent/profile*',
+      ],
+      run_at: 'document_end',
+      js: ['src/content/linkedin-email-listener.ts'],
+    },
+    {
       matches: ['<all_urls>'],
       all_frames: true,
       js: ['src/content/tip.ts'],
