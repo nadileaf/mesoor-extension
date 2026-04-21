@@ -293,6 +293,8 @@ const socket$ = combineLatest([user$, preferences$]).pipe(
 socket$.subscribe();
 
 // 需要缓存headers用来重放的url
+// 如果只需要监听请求是否发生用这个就行
+// 如果有后续diy处理就用这个流
 const needCacheHeadersUrl = [
   // 多猎
   '*://api-rcn.duolie.com/api/com.liepin.rcnresume.get-resume-detail*',
@@ -315,8 +317,12 @@ const needCacheHeadersUrl = [
   // boss直聘
   // 搜索
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
-  // 沟通历史
-  // '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
+  // 沟通内简历的跳板请求-首先拿到
+  '*://www.zhipin.com/wapi/zpchat/boss/historyMsg?*',
+  //意向沟通
+  '*://www.zhipin.com/wapi/hunter/h5/intention/boss/recommend/detail*',
+  // 互动+推荐
+  '*://www.zhipin.com/wapi/zpjob/view/geek/info/v2*',
   // 猎聘企业-搜索
   '*://api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail',
   '*://yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2',
@@ -350,6 +356,9 @@ const needCacheHeadersUrlSubStream = [
   '*://rd6.zhaopin.com/api/im/session/detail*',
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
   '*://jianli.58.com/resumedetail/v2/single*',
+
+  //意向沟通
+  '*://www.zhipin.com/wapi/hunter/h5/intention/boss/recommend/detail*',
 ];
 // 执行截图的配置
 const needViewportScreenshotUrlSubStream = [
@@ -2680,6 +2689,90 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   retry(),
   share()
 );
+// 互动+推荐
+const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
+  filter(({ details }) => {
+    return details.url.includes('www.zhipin.com/wapi/zpjob/view/geek/info');
+  }),
+  map(response => {
+    const { details, replayResponse, headers } = response;
+    return { details, replayResponse, headers };
+  }),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    const urlObj = new URL(details.url);
+    const securityId = urlObj.searchParams.get('securityId');
+
+    const _headers = {};
+    if (details.requestHeaders) {
+      details.requestHeaders.forEach(items => {
+        if (items.value) {
+          _headers[items.name] = items.value;
+        }
+      });
+    }
+
+    // 从 replayResponse.zpData.jobCompetitive.url 中提取参数
+    let jobCompetitiveParams = {};
+    try {
+      if (replayResponse?.zpData?.jobCompetitive?.url) {
+        const jobCompetitiveUrl = new URL(replayResponse.zpData.jobCompetitive.url);
+        jobCompetitiveParams = Object.fromEntries(jobCompetitiveUrl.searchParams.entries());
+        console.log('提取到 jobCompetitive URL 参数:', jobCompetitiveParams);
+      }
+    } catch (e) {
+      console.error('提取 jobCompetitive URL 参数失败:', e);
+    }
+
+    const shareUrl =
+      'https://www.zhipin.com/wapi/zpboss/h5/share/geek/data.json?securityId=' +
+      encodeURIComponent(securityId);
+
+    let shareJson = null;
+    try {
+      const shareResp = await request(shareUrl, {
+        method: 'GET',
+        headers: _headers,
+      });
+      shareJson = await shareResp.json();
+    } catch (e) {
+      console.error('bossInteractionRecommend 获取 share 失败:', e);
+    }
+
+    const mergedJson = shareJson
+      ? {
+          ...shareJson,
+          mesoorExtra: {
+            ...(shareJson.mesoorExtra ? shareJson.mesoorExtra : {}),
+            sourceUrl: details.url,
+            securityId,
+            jobCompetitiveParams,
+          },
+        }
+      : {
+          ...(replayResponse || {}),
+          mesoorExtra: {
+            ...(replayResponse && replayResponse.mesoorExtra
+              ? replayResponse.mesoorExtra
+              : {}),
+            sourceUrl: details.url,
+            securityId,
+            jobCompetitiveParams,
+          },
+        };
+    const body = {
+      jsonBody: mergedJson,
+      url: details.url,
+      fileContentB64: [],
+    };
+    return { details, headers, body };
+  }),
+  catchError(error => {
+    console.error('bossInteractionRecommend 错误:', error);
+    return of();
+  }),
+  retry()
+);
+
 // 猎聘诚猎通-非沟通需要把工作经历的请求拼出来
 const liePinChengLieTongPageResume$ = resumeSendHeadersV2Base$.pipe(
   map(response => {
@@ -3425,6 +3518,7 @@ const mergedResume$ = merge(
   resumeSendHeadersV2BaseSub$,
   // boss沟通
   bossCommunication$,
+  bossInteractionRecommend$,
   yupaoGouTongResume$,
   // html采集
   htmlSync$,

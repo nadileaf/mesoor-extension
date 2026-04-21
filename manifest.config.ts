@@ -59,6 +59,12 @@ export default defineManifest({
         '*://*.duolie.com/*',
         '*://lpt.liepin.com/*',
         '*://*.yupao.com/*',
+        '*://www.zhipin.com/*',
+        '*://www.zhipin.com/web/chat/index*',
+        '*://www.zhipin.com/web/chat/recommend*',
+        '*://www.zhipin.com/web/chat/intention*',
+        '*://www.zhipin.com/web/chat/aiform*',
+        '*://www.zhipin.com/web/chat/interaction*',
       ],
     },
     {
