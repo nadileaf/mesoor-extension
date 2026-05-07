@@ -2666,7 +2666,17 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     ) {
       opt.body = new Blob([requestBody]);
     }
-    const _replayResponse = await request(details.url, opt);
+    // 默认重放原始 url；部分站点需要把监听到的 url 转换成另一个 url 再重放
+    let replayUrl = details.url;
+    // boss直聘：监听 geek/info/v2，但重放时请求 geek/info（不带 v2）
+    // 例如：/wapi/zpjob/view/geek/info/v2?encryptJid=xxx -> /wapi/zpjob/view/geek/info?encryptJid=xxx
+    if (replayUrl.includes('www.zhipin.com/wapi/zpjob/view/geek/info/v2')) {
+      replayUrl = replayUrl.replace(
+        '/wapi/zpjob/view/geek/info/v2',
+        '/wapi/zpjob/view/geek/info'
+      );
+    }
+    const _replayResponse = await request(replayUrl, opt);
     const replayResponse = await _replayResponse.json();
     requestsHeaderMap.delete(details.requestId);
     return {
@@ -2692,7 +2702,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
 // 互动+推荐
 const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => {
-    return details.url.includes('www.zhipin.com/wapi/zpjob/view/geek/info');
+    return details.url.includes('www.zhipin.com/wapi/zpjob/view/geek/info/v2');
   }),
   map(response => {
     const { details, replayResponse, headers } = response;
@@ -2728,14 +2738,17 @@ const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
       encodeURIComponent(securityId);
 
     let shareJson = null;
-    try {
-      const shareResp = await request(shareUrl, {
-        method: 'GET',
-        headers: _headers,
-      });
-      shareJson = await shareResp.json();
-    } catch (e) {
-      console.error('bossInteractionRecommend 获取 share 失败:', e);
+    const disableShareRequest = true;
+    if (!disableShareRequest) {
+      try {
+        const shareResp = await request(shareUrl, {
+          method: 'GET',
+          headers: _headers,
+        });
+        shareJson = await shareResp.json();
+      } catch (e) {
+        console.error('bossInteractionRecommend 获取 share 失败:', e);
+      }
     }
 
     const mergedJson = shareJson
