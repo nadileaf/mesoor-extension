@@ -3590,6 +3590,7 @@ mergedResume$
       };
       const { details, headers, body } = data;
       try {
+        const extensionVersion = browser.runtime.getManifest().version;
         const bodyUrl = details.url;
         const rawBytes = details?.requestBody?.raw?.[0]?.bytes;
         let _requestBody = null;
@@ -3633,6 +3634,7 @@ mergedResume$
         };
 
         const requestBody = {
+          extensionVersion,
           html: details?.html,
           jsonBody: body?.jsonBody,
           // 坑：领英不是json解不出来
