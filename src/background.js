@@ -302,6 +302,8 @@ const needCacheHeadersUrl = [
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
   // 猎聘诚猎通-搜索
   '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume-detail',
+  // 猎聘诚猎通-搜索-2026-0528新版
+  '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.resume-view',
   // 智联招聘-推荐人才/搜索人才/人才管理
   '*://rd6.zhaopin.com/api/resume/detail?*',
   // CGL领英的企业账户搜索页/人才推荐页
@@ -356,6 +358,8 @@ const needCacheHeadersUrlSubStream = [
   '*://rd6.zhaopin.com/api/im/session/detail*',
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
   '*://jianli.58.com/resumedetail/v2/single*',
+    // 猎聘诚猎通-搜索-2026-0528新版
+  '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.resume-view',
 
   //意向沟通
   '*://www.zhipin.com/wapi/hunter/h5/intention/boss/recommend/detail*',
