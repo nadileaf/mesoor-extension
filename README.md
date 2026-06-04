@@ -32,6 +32,10 @@ pnpm build --mode development
 pnpm dev:production
 pnpm build --mode production
 
+# Inzight 开发环境 (inzight-development)
+pnpm dev:inzight-development
+pnpm build:inzight-development
+
 # App 开发环境 (app-development)
 pnpm dev:app-development
 pnpm build:app-development

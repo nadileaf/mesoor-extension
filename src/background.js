@@ -81,6 +81,7 @@ let wait = null;
 const tabsObject = {};
 // 存储按 tabId 维度的额外同步数据，由 WebSocket 消息写入，在接口同步时一起发送
 const tabExtraDataByTabId = {};
+const tokenCookieNames = ['access_token', 'token'];
 
 // 监听标签页关闭事件，清理与该 tabId 相关的缓存数据
 browser.tabs.onRemoved.addListener(tabId => {
@@ -387,12 +388,16 @@ installDeclarativeNet(apiConfig);
 
 async function getTokenFromTip() {
   try {
-    const cookies = await browser.cookies.get({
-      url: Token_Host,
-      name: 'token',
-    });
-    const token = cookies ? cookies.value : null;
-    return token;
+    for (const name of tokenCookieNames) {
+      const cookies = await browser.cookies.get({
+        url: Token_Host,
+        name,
+      });
+      if (cookies) {
+        return cookies.value;
+      }
+    }
+    return null;
   } catch (error) {
     console.error('获取token时出错:', error);
     return null;
@@ -2190,12 +2195,14 @@ browser.action.onClicked.addListener(async tab => {
 // 直接从 cookie 中获取 token
 async function getTokenFromCookie() {
   try {
-    const token_obj = await browser.cookies.get({
-      url: Token_Host,
-      name: 'token',
-    });
-    if (token_obj && token_obj.value) {
-      return token_obj.value;
+    for (const name of tokenCookieNames) {
+      const token_obj = await browser.cookies.get({
+        url: Token_Host,
+        name,
+      });
+      if (token_obj && token_obj.value) {
+        return token_obj.value;
+      }
     }
     return null;
   } catch (error) {

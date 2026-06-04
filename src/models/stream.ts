@@ -1,6 +1,7 @@
 import browser, { Cookies, Runtime } from 'webextension-polyfill';
 import { fromEventPattern, Observable } from 'rxjs';
 import { map, filter, share, tap } from 'rxjs/operators';
+import { getDomain } from '../utils/user-utils';
 
 interface ResumeSyncErrorMessage {
   status: number;
@@ -329,9 +330,14 @@ const cookiesChange$: Observable<Cookies.OnChangedChangeInfoType> =
     onCookieChange.removeListener.bind(onCookieChange)
   ).pipe(share());
 
-export function onCookiesChange$(domain: string): Observable<Cookies.Cookie> {
+export function onCookiesChange$(url: string): Observable<Cookies.Cookie> {
+  const { hostname } = new URL(url);
+  const domains =
+    hostname === 'localhost' || hostname === '127.0.0.1'
+      ? [hostname, `.${hostname}`]
+      : [getDomain(url)];
   return cookiesChange$.pipe(
-    filter(info => info.cookie.domain === domain),
+    filter(info => domains.includes(info.cookie.domain)),
     map(info => info.cookie)
   );
 }

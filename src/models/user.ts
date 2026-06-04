@@ -32,6 +32,16 @@ const envChange$ = localstorageChange$.pipe(
 
 export const env$ = concat(fromStorage$, envChange$).pipe(shareReplay(1));
 
+const getCookieQuery = (url: string): Cookies.GetAllDetailsType => {
+  const { hostname } = new URL(url);
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return { url };
+  }
+  return { domain: getDomain(url) };
+};
+
+const tokenCookieNames = ['access_token', 'token'];
+
 /**
  * current sync storage stream
  */
@@ -41,12 +51,12 @@ export const env$ = concat(fromStorage$, envChange$).pipe(shareReplay(1));
 // 如果想要修改这个，加一个新流和一个新的storage，在cookiechange的时候查询所有相关cookie，少了一个就设置这个storage，同时socket$流combineLast里面多加入一个流即可。
 export const user$ = env$.pipe(
   switchMap(_env => {
-    const domain = getDomain(import.meta.env.VITE_TOKEN_HOST);
-    const getCookies = browser.cookies.getAll({ domain });
+    const cookieQuery = getCookieQuery(import.meta.env.VITE_TOKEN_HOST);
+    const getCookies = browser.cookies.getAll(cookieQuery);
     return concat(
       from(getCookies).pipe(
         // 将所有 cookies 收集到数组中
-        map(cookies => cookies.filter(c => c.name === 'token')),
+        map(cookies => cookies.filter(c => tokenCookieNames.includes(c.name))),
         // 解析所有 token 并按 iat 时间戳排序，取最新的
         map(tokenCookies => {
           if (tokenCookies.length === 0) return [];
@@ -67,14 +77,23 @@ export const user$ = env$.pipe(
             };
           });
 
-          // 按 iat 降序排序，取最新的
-          parsedTokens.sort((a, b) => b.iat - a.iat);
+          parsedTokens.sort((a, b) => {
+            const namePriority =
+              tokenCookieNames.indexOf(a.cookie.name) -
+              tokenCookieNames.indexOf(b.cookie.name);
+            if (namePriority !== 0) {
+              return namePriority;
+            }
+            return b.iat - a.iat;
+          });
           return parsedTokens.length > 0 ? [parsedTokens[0].cookie] : [];
         }),
         // 展开数组
         switchMap(cookies => from(cookies))
       ),
-      onCookiesChange$(domain).pipe(filter(cookie => cookie.name === 'token'))
+      onCookiesChange$(import.meta.env.VITE_TOKEN_HOST).pipe(
+        filter(cookie => tokenCookieNames.includes(cookie.name))
+      )
     );
   }),
   scan((user: Partial<TipUser>, cookie: Cookies.Cookie) => {
@@ -98,10 +117,10 @@ export const user$ = env$.pipe(
 );
 
 export const isLogin = async (env: string): Promise<Map<string, string>> => {
-  const cookies = await browser.cookies.getAll({ domain: getDomain(env!) });
+  const cookies = await browser.cookies.getAll(getCookieQuery(env));
   let cookieObj: Map<string, string> = new Map();
   cookies.forEach(cookie => {
-    if (['token'].includes(cookie.name)) {
+    if (tokenCookieNames.includes(cookie.name)) {
       cookieObj.set(cookie.name, cookie.value);
     }
   });
@@ -130,12 +149,14 @@ export const clearUserCookie = () => {
       try {
         const domain = env!;
 
-        await Promise.all([
-          browser.cookies.remove({
-            url: `https://${domain}/`,
-            name: 'token',
-          }),
-        ]);
+        await Promise.all(
+          tokenCookieNames.map(name =>
+            browser.cookies.remove({
+              url: `https://${domain}/`,
+              name,
+            })
+          )
+        );
         const query = await browser.tabs.query({
           url: `https://${domain}/*`,
         });

@@ -1,7 +1,17 @@
 // content.js
 console.log('TIP内容脚本已注入');
 
-const source = 'MesoorExtension';
+const pingSource = import.meta.env.VITE_EXTENSION_PING_SOURCE;
+const source = import.meta.env.VITE_EXTENSION_PONG_SOURCE;
+
+if (!pingSource) {
+  throw new Error('Missing required env: VITE_EXTENSION_PING_SOURCE');
+}
+
+if (!source) {
+  throw new Error('Missing required env: VITE_EXTENSION_PONG_SOURCE');
+}
+
 window.postMessage(source);
 
 // 监听来自网页的消息
@@ -9,7 +19,7 @@ window.addEventListener('message', event => {
   const { data } = event;
 
   // 仅接受来自本页面的消息，并检查消息类型以确保安全
-  if (event.source !== window || !data || data.source !== 'tip') {
+  if (event.source !== window || !data || data.source !== pingSource) {
     return;
   }
 

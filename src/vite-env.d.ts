@@ -17,6 +17,8 @@ interface ImportMetaEnv {
   readonly VITE_DIFY_JOB_CHECK_API_KEY: string;
   readonly VITE_DIFY_LINKEDIN_EMAIL_API_KEY: string;
   readonly VITE_DIFY_LINKEDIN_EMAIL_HOST: string;
+  readonly VITE_EXTENSION_PING_SOURCE: string;
+  readonly VITE_EXTENSION_PONG_SOURCE: string;
 }
 
 interface ImportMeta {
