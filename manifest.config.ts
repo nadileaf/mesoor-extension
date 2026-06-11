@@ -22,6 +22,7 @@ export default defineManifest({
     'sidePanel',
     'declarativeNetRequest',
     'downloads',
+    'tabGroups',
     'desktopCapture',
     'cookies',
     'storage',

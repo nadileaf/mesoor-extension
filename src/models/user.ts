@@ -1,4 +1,4 @@
-import { combineLatest, concat, from, timer } from 'rxjs';
+import { combineLatest, concat, from, of, timer } from 'rxjs';
 import {
   distinctUntilChanged,
   filter,
@@ -11,7 +11,7 @@ import type { Cookies } from 'webextension-polyfill';
 import browser from 'webextension-polyfill';
 import { LocalStorage, TipUser } from '../interfaces/storage.ts';
 
-import { getDomain, parseJwt } from '../utils/user-utils';
+import { parseJwt } from '../utils/user-utils';
 import { localstorageChange$ } from './storage';
 import { onCookiesChange$ } from './stream';
 
@@ -33,14 +33,29 @@ const envChange$ = localstorageChange$.pipe(
 export const env$ = concat(fromStorage$, envChange$).pipe(shareReplay(1));
 
 const getCookieQuery = (url: string): Cookies.GetAllDetailsType => {
-  const { hostname } = new URL(url);
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return { url };
-  }
-  return { domain: getDomain(url) };
+  // 使用 { url } 精确查询，避免 getDomain 提取父域名后
+  // 导致 tip-test.nadileaf.com 和 inzight.nadileaf.com 互相串 token
+  return { url };
 };
 
 const tokenCookieNames = ['access_token', 'token'];
+const extensionDefaultToken =
+  import.meta.env.VITE_EXTENSION_DEFAULT_TOKEN?.trim();
+
+// WebSocket 身份标识字段，可通过环境变量配置
+// 'token' (默认): token变化时重连
+// 'sub': JWT sub字段变化时重连（适合token频繁刷新的环境）
+const wsIdentityKey = import.meta.env.VITE_WS_IDENTITY_KEY || 'token';
+
+function compareUserIdentity(pre: TipUser, cur: TipUser): boolean {
+  if (wsIdentityKey === 'sub') {
+    if (pre.sub && cur.sub) {
+      return pre.sub === cur.sub;
+    }
+  }
+  // 默认或 fallback 回退到 token 比较
+  return pre.token === cur.token;
+}
 
 /**
  * current sync storage stream
@@ -49,7 +64,7 @@ const tokenCookieNames = ['access_token', 'token'];
 // 租户token都是使用断开连接之前的，因为这个cookiechange代表着改变，谁改变这个cookie就是谁(即就算被清除了也算是change)，而scan又会返回之前的值
 // 所以user流里的返回值有着较大缺陷(distinctUntilChanged不会让你重复触发连续一样的流的值)，只有在刚安装插件时才奏效，一旦登录过后，退出登录后仍可继续使用直至浏览器完全退出(进程全部结束)。
 // 如果想要修改这个，加一个新流和一个新的storage，在cookiechange的时候查询所有相关cookie，少了一个就设置这个storage，同时socket$流combineLast里面多加入一个流即可。
-export const user$ = env$.pipe(
+const cookieUser$ = env$.pipe(
   switchMap(_env => {
     const cookieQuery = getCookieQuery(import.meta.env.VITE_TOKEN_HOST);
     const getCookies = browser.cookies.getAll(cookieQuery);
@@ -110,11 +125,23 @@ export const user$ = env$.pipe(
       token: decodedValue,
     };
     return { ...user, ...tipUser };
-  }, {}),
-  filter(isUser),
-  distinctUntilChanged((pre: TipUser, cur: TipUser) => pre.token === cur.token),
-  shareReplay(1)
+  }, {})
 );
+
+export const user$ = extensionDefaultToken
+  ? of({
+      ...parseJwt(extensionDefaultToken),
+      token: extensionDefaultToken,
+    }).pipe(
+      filter(isUser),
+      distinctUntilChanged(compareUserIdentity),
+      shareReplay(1)
+    )
+  : cookieUser$.pipe(
+      filter(isUser),
+      distinctUntilChanged(compareUserIdentity),
+      shareReplay(1)
+    );
 
 export const isLogin = async (env: string): Promise<Map<string, string>> => {
   const cookies = await browser.cookies.getAll(getCookieQuery(env));
@@ -140,7 +167,7 @@ export const userCookieCheck$ = combineLatest(
   );
 
 function isUser(user: object): user is TipUser {
-  return 'tenantAlias' in user;
+  return 'token' in user && typeof (user as TipUser).token === 'string';
 }
 
 export const clearUserCookie = () => {

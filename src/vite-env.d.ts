@@ -13,12 +13,20 @@ interface ImportMetaEnv {
   readonly VITE_SOURCING_AGENT_URL: string;
   readonly VITE_ENABLE_SOURCING_CHAT?: string;
   readonly VITE_ICON_PATH?: string;
+  readonly VITE_NOTIFICATION_ICON?: string;
   readonly VITE_EFFEX_CONFIGS_URL: string;
   readonly VITE_DIFY_JOB_CHECK_API_KEY: string;
   readonly VITE_DIFY_LINKEDIN_EMAIL_API_KEY: string;
   readonly VITE_DIFY_LINKEDIN_EMAIL_HOST: string;
   readonly VITE_EXTENSION_PING_SOURCE: string;
   readonly VITE_EXTENSION_PONG_SOURCE: string;
+  readonly VITE_EXTENSION_DEFAULT_TOKEN?: string;
+  /**
+   * WebSocket连接身份标识字段，决定distinctUntilChanged比较逻辑
+   * - 'token': token变化时重连（默认行为）
+   * - 'sub': JWT sub字段变化时重连（适合token频繁刷新的环境如inzight）
+   */
+  readonly VITE_WS_IDENTITY_KEY?: 'token' | 'sub';
 }
 
 interface ImportMeta {

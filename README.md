@@ -55,6 +55,10 @@ pnpm build:tip-cgl
 
 3. Open Chrome and navigate to `chrome://extensions/`, enable "Developer mode", and load the unpacked extension from the `dist` directory.
 
+## Environment Variables
+
+- `VITE_EXTENSION_DEFAULT_TOKEN`: optional. When empty, the extension reads token from cookies automatically. When set, the extension uses this token directly and skips cookie token lookup.
+
 4. Build for production:
 
 ```bash

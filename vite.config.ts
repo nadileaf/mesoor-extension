@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
 
   // 动态设置环境变量供 manifest.config.ts 使用
   process.env.VITE_ICON_PATH = env.VITE_ICON_PATH;
+  process.env.VITE_NOTIFICATION_ICON = env.VITE_NOTIFICATION_ICON;
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const manifest = require('./manifest.config.ts').default;

@@ -61,6 +61,8 @@ const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
 const enableSocketConnection =
   import.meta.env.VITE_ENABLE_SOCKET_CONNECTION === 'true';
 const defaultEnv = import.meta.env.VITE_DOMAIN_HOST;
+const extensionDefaultToken =
+  import.meta.env.VITE_EXTENSION_DEFAULT_TOKEN?.trim();
 // 输出环境变量日志
 console.log('环境变量加载配置:', import.meta.env);
 console.log('环境变量生效配置:', {
@@ -82,6 +84,8 @@ const tabsObject = {};
 // 存储按 tabId 维度的额外同步数据，由 WebSocket 消息写入，在接口同步时一起发送
 const tabExtraDataByTabId = {};
 const tokenCookieNames = ['access_token', 'token'];
+// 存储按 tabId 维度的网络请求监听器，用于 MonitorNetworkAction
+const networkMonitors = new Map();
 
 // 监听标签页关闭事件，清理与该 tabId 相关的缓存数据
 browser.tabs.onRemoved.addListener(tabId => {
@@ -90,6 +94,13 @@ browser.tabs.onRemoved.addListener(tabId => {
   }
   if (tabExtraDataByTabId[tabId]) {
     delete tabExtraDataByTabId[tabId];
+  }
+  // 清理该 tabId 的网络监听器
+  const monitor = networkMonitors.get(tabId);
+  if (monitor) {
+    browser.webRequest.onCompleted.removeListener(monitor.listener);
+    clearTimeout(monitor.timer);
+    networkMonitors.delete(tabId);
   }
 });
 /**
@@ -387,6 +398,10 @@ const maimaiResume$ = RequestListen.install([
 installDeclarativeNet(apiConfig);
 
 async function getTokenFromTip() {
+  if (extensionDefaultToken) {
+    return extensionDefaultToken;
+  }
+
   try {
     for (const name of tokenCookieNames) {
       const cookies = await browser.cookies.get({
@@ -462,10 +477,10 @@ function connectWebSocket(user) {
       `WebSocket closed with code ${event.code}. Clean: ${event.wasClean} tenantAlias: ${user.tenantAlias}`
     );
 
-    // 如果是正常关闭（比如token变化导致的关闭），不进行重连
-    if (event.wasClean) {
+    // 只有客户端主动正常关闭（_normalClose）才不重连；服务端部署/代理关闭也要重连
+    if (socket._normalClose) {
       console.log(
-        `WebSocket closed cleanly, not attempting to reconnect tenantAlias: ${user.tenantAlias}`
+        `WebSocket closed normally by client, not attempting to reconnect tenantAlias: ${user.tenantAlias}`
       );
       return;
     }
@@ -547,8 +562,10 @@ async function handleWebSocketMessage(message) {
     case 'ScrollToBottomOnceAction':
       if (message.tabId) {
         try {
-          // 先切换到目标标签页
-          await browser.tabs.update(message.tabId, { active: true });
+          // 先切换到目标标签页（默认行为，可通过 active: false 禁用）
+          if (message.active !== false) {
+            await browser.tabs.update(message.tabId, { active: true });
+          }
 
           // 在目标标签页中执行滚动到底部（一次性动作）
           const result = await browser.tabs.sendMessage(message.tabId, {
@@ -643,9 +660,31 @@ async function handleWebSocketMessage(message) {
     case 'OpenTabAction':
       if (message.url) {
         try {
-          const tab = await browser.tabs.create({ url: message.url });
+          const tab = await browser.tabs.create({ url: message.url, active: message.active !== false });
           const tabId = tab.id;
           console.log('Tab created:', tab);
+
+          // 如果指定了 groupName，将标签页放入对应分组（不存在则自动创建）
+          if (message.groupName) {
+            try {
+              const groups = await browser.tabGroups.query({});
+              const existingGroup = groups.find(
+                g => g.title === message.groupName
+              );
+              if (existingGroup) {
+                await browser.tabs.group({
+                  groupId: existingGroup.id,
+                  tabIds: tabId,
+                });
+              } else {
+                const groupId = await browser.tabs.group({ tabIds: tabId });
+                await browser.tabGroups.update(groupId, { title: message.groupName });
+              }
+            } catch (groupError) {
+              console.error('将标签页放入分组失败:', groupError);
+            }
+          }
+
           const startTime = Date.now();
           const timeout = 10000;
           while (true) {
@@ -669,8 +708,10 @@ async function handleWebSocketMessage(message) {
             console.log('Tab status:', updatedTab.status);
 
             if (updatedTab.status === 'complete') {
-              // 确保标签页是激活的
-              await browser.tabs.update(tabId, { active: true });
+              // 确保标签页是激活的（默认行为，可通过 active: false 禁用）
+              if (message.active !== false) {
+                await browser.tabs.update(tabId, { active: true });
+              }
 
               // 等待一小段时间确保页面完全渲染
               await new Promise(resolve => setTimeout(resolve, 500));
@@ -714,6 +755,56 @@ async function handleWebSocketMessage(message) {
             })
           );
         }
+      }
+      break;
+    case 'GroupTabAction':
+      if (!message.tabId || !message.groupName) {
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '参数错误',
+            error: '缺少必要参数 tabId 或 groupName',
+            requestUniqueId: requestUniqueId,
+          })
+        );
+        break;
+      }
+      try {
+        const groups = await browser.tabGroups.query({});
+        const existingGroup = groups.find(
+          g => g.title === message.groupName
+        );
+        if (existingGroup) {
+          await browser.tabs.group({
+            groupId: existingGroup.id,
+            tabIds: message.tabId,
+          });
+        } else {
+          const groupId = await browser.tabs.group({ tabIds: message.tabId });
+          await browser.tabGroups.update(groupId, { title: message.groupName });
+        }
+        ws.send(
+          JSON.stringify({
+            type: 'GroupTabAction',
+            typeCn: '标签页分组成功',
+            success: true,
+            tabId: message.tabId,
+            groupName: message.groupName,
+            requestUniqueId: requestUniqueId,
+          })
+        );
+      } catch (error) {
+        console.error('将标签页放入分组失败:', error);
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            typeCn: '标签页分组失败',
+            error: error.message,
+            tabId: message.tabId,
+            groupName: message.groupName,
+            requestUniqueId: requestUniqueId,
+          })
+        );
       }
       break;
     case 'ScreenShotAction':
@@ -896,8 +987,10 @@ async function handleWebSocketMessage(message) {
     case 'ClickElementAction':
       {
         try {
-          // 先切换到目标标签页
-          await browser.tabs.update(message.tabId, { active: true });
+          // 先切换到目标标签页（默认行为，可通过 active: false 禁用）
+          if (message.active !== false) {
+            await browser.tabs.update(message.tabId, { active: true });
+          }
 
           // 在目标标签页中执行点击操作
           const result = await browser.tabs.sendMessage(message.tabId, {
@@ -993,8 +1086,10 @@ async function handleWebSocketMessage(message) {
 
       try {
         const tab = await browser.tabs.get(message.tabId);
-        // 先切换到目标标签页
-        await browser.tabs.update(message.tabId, { active: true });
+        // 先切换到目标标签页（默认行为，可通过 active: false 禁用）
+        if (message.active !== false) {
+          await browser.tabs.update(message.tabId, { active: true });
+        }
 
         // 在目标标签页中执行输入操作
         const result = await browser.tabs.sendMessage(message.tabId, {
@@ -1153,8 +1248,10 @@ async function handleWebSocketMessage(message) {
     case 'ScrollAction':
       if (message.tabId) {
         try {
-          // 先切换到目标标签页
-          await browser.tabs.update(message.tabId, { active: true });
+          // 先切换到目标标签页（默认行为，可通过 active: false 禁用）
+          if (message.active !== false) {
+            await browser.tabs.update(message.tabId, { active: true });
+          }
 
           // 在目标标签页中执行滚动操作
           const result = await browser.tabs.sendMessage(message.tabId, {
@@ -1687,10 +1784,13 @@ async function handleWebSocketMessage(message) {
       break;
     case 'NotificationAction':
       {
+        console.log('[NotificationAction] 收到通知消息:', message);
         // 使用 WebExtension 通知 API 显示系统通知
         const title = message.title || 'Mesoor 通知';
         const body = message.message || '你有新的消息';
-        const iconUrl = message.iconUrl || 'public/logo.png';
+        const rawIcon = import.meta.env.VITE_NOTIFICATION_ICON || 'logo.png';
+        const iconFile = rawIcon.replace(/^public\//, '');
+        const iconUrl = message.iconUrl || chrome.runtime.getURL(iconFile);
         try {
           await browser.notifications.create('', {
             type: 'basic',
@@ -1707,10 +1807,204 @@ async function handleWebSocketMessage(message) {
             })
           );
         } catch (error) {
+          console.error('[NotificationAction] 通知展示失败:', error);
           ws.send(
             JSON.stringify({
               type: 'error',
               typeCn: '通知展示失败',
+              error: error.message,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
+      break;
+    case 'ToastAction':
+      {
+        try {
+          const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+          const activeTab = tabs[0];
+          if (activeTab?.id) {
+            await browser.tabs.sendMessage(activeTab.id, {
+              type: 'show-toast',
+              title: message.title,
+              message: message.message,
+              toastType: message.toastType || 'info',
+              duration: message.duration !== undefined ? message.duration : 4000,
+            });
+            ws.send(
+              JSON.stringify({
+                type: message.actionType,
+                typeCn: '提示已展示',
+                success: true,
+                requestUniqueId: requestUniqueId,
+              })
+            );
+          } else {
+            ws.send(
+              JSON.stringify({
+                type: 'error',
+                typeCn: '提示展示失败',
+                error: '未找到活动标签页',
+                requestUniqueId: requestUniqueId,
+              })
+            );
+          }
+        } catch (error) {
+          console.error('[ToastAction] 发送失败:', error);
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '提示展示失败',
+              error: error.message,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }
+      }
+      break;
+    case 'MonitorNetworkAction':
+      {
+        if (
+          !message.tabId ||
+          !message.timeout ||
+          !Array.isArray(message.config) ||
+          message.config.length === 0
+        ) {
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '参数错误',
+              error: '缺少必要参数 tabId、timeout 或 config',
+              requestUniqueId: requestUniqueId,
+            })
+          );
+          break;
+        }
+
+        // 如果该 tabId 已有监听器，先清理旧的
+        const existingMonitor = networkMonitors.get(message.tabId);
+        if (existingMonitor) {
+          browser.webRequest.onCompleted.removeListener(existingMonitor.listener);
+          clearTimeout(existingMonitor.timer);
+          networkMonitors.delete(message.tabId);
+        }
+
+        let matched = false;
+
+        const listener = details => {
+          if (matched) return;
+          if (details.tabId !== message.tabId) return;
+
+          for (const cfg of message.config) {
+            try {
+              const regex = new RegExp(cfg.urlPattern);
+              if (!regex.test(details.url)) continue;
+              if (cfg.method && details.method !== cfg.method.toUpperCase()) continue;
+              if (
+                cfg.responseStatusCode !== undefined &&
+                details.statusCode !== cfg.responseStatusCode
+              )
+                continue;
+
+              // 匹配成功
+              matched = true;
+              browser.webRequest.onCompleted.removeListener(listener);
+              const monitor = networkMonitors.get(message.tabId);
+              if (monitor) {
+                clearTimeout(monitor.timer);
+                networkMonitors.delete(message.tabId);
+              }
+
+              ws.send(
+                JSON.stringify({
+                  type: 'MonitorNetworkAction',
+                  typeCn: '接口请求已检测到',
+                  success: true,
+                  tabId: message.tabId,
+                  matchedUrl: details.url,
+                  matchedMethod: details.method,
+                  matchedStatusCode: details.statusCode,
+                  requestUniqueId: requestUniqueId,
+                })
+              );
+              break;
+            } catch (e) {
+              console.error('[MonitorNetworkAction] 正则匹配错误:', e);
+            }
+          }
+        };
+
+        browser.webRequest.onCompleted.addListener(
+          listener,
+          { urls: ['<all_urls>'] }
+        );
+
+        const timer = setTimeout(() => {
+          if (matched) return;
+          browser.webRequest.onCompleted.removeListener(listener);
+          networkMonitors.delete(message.tabId);
+          ws.send(
+            JSON.stringify({
+              type: 'MonitorNetworkAction',
+              typeCn: '接口请求未检测到',
+              success: false,
+              tabId: message.tabId,
+              requestUniqueId: requestUniqueId,
+            })
+          );
+        }, message.timeout * 1000);
+
+        networkMonitors.set(message.tabId, { listener, timer });
+      }
+      break;
+    case 'ShowCopyModalAction':
+      {
+        try {
+          if (!message.content) {
+            ws.send(
+              JSON.stringify({
+                type: 'error',
+                typeCn: '参数错误',
+                error: '缺少必要参数 content',
+                requestUniqueId: requestUniqueId,
+              })
+            );
+            break;
+          }
+
+          const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+          const activeTab = tabs[0];
+          if (activeTab?.id) {
+            await browser.tabs.sendMessage(activeTab.id, {
+              type: 'show-copy-modal',
+              title: message.title,
+              content: message.content,
+            });
+            ws.send(
+              JSON.stringify({
+                type: message.actionType,
+                typeCn: '弹窗已展示',
+                success: true,
+                requestUniqueId: requestUniqueId,
+              })
+            );
+          } else {
+            ws.send(
+              JSON.stringify({
+                type: 'error',
+                typeCn: '弹窗展示失败',
+                error: '未找到活动标签页',
+                requestUniqueId: requestUniqueId,
+              })
+            );
+          }
+        } catch (error) {
+          console.error('[ShowCopyModalAction] 发送失败:', error);
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              typeCn: '弹窗展示失败',
               error: error.message,
               requestUniqueId: requestUniqueId,
             })
@@ -2194,6 +2488,10 @@ browser.action.onClicked.addListener(async tab => {
 
 // 直接从 cookie 中获取 token
 async function getTokenFromCookie() {
+  if (extensionDefaultToken) {
+    return extensionDefaultToken;
+  }
+
   try {
     for (const name of tokenCookieNames) {
       const token_obj = await browser.cookies.get({
