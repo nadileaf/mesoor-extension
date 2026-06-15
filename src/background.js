@@ -127,13 +127,27 @@ browser.runtime.onInstalled.addListener(async detail => {
   }
 
   await browser.storage.local.set({ env: defaultEnv, activities: {} });
-  console.log('on install setting success...');
+  console.log('[onInstalled] 已设置 env:', defaultEnv);
+  console.log('[onInstalled] 初始化完成');
+
+  // 等待一小段时间，确保 storage 设置完成并触发 change 事件
+  setTimeout(async () => {
+    console.log('[onInstalled] 延迟触发 socket 连接');
+    await refreshStorage(); // 先刷新 storage，触发流更新
+    initSocketConnection();
+  }, 500);
 });
-wait$.subscribe(waitState => (wait = waitState.isSyncWait));
+wait$.subscribe(waitState => {
+  wait = waitState.isSyncWait;
+  console.log('[wait$] waitState 更新:', waitState);
+});
 
 let linkedInEmailWait = false;
 linkedInEmailWait$.subscribe(
-  waitState => (linkedInEmailWait = waitState.isEmailWait)
+  waitState => {
+    linkedInEmailWait = waitState.isEmailWait;
+    console.log('[linkedInEmailWait$] waitState 更新:', waitState);
+  }
 );
 
 // 加载网站拦截规则
@@ -254,55 +268,120 @@ let apiConfig = {
   ],
 };
 
-const socket$ = combineLatest([user$, preferences$]).pipe(
-  switchMap(([user, preferences]) => {
-    if (!user || preferences.disabled) {
-      if (ws) {
-        console.log(
-          `禁用开关状态改变为${preferences.disabled} 或用户${user}不存在 导致主动断开socket，`
-        );
-        ws._normalClose = true;
-        ws.close();
-        ws = null;
-      }
-      return EMPTY;
-    }
+let socket$ = null;
 
-    const socket = connectWebSocket(user);
-    if (!socket) return EMPTY;
-    ws = socket;
-    return new Observable(observer => {
-      const messageHandler = event => {
-        try {
-          const data = JSON.parse(event.data);
-          observer.next(data);
-        } catch (e) {
-          console.error('解析WebSocket消息失败:', e);
-        }
-      };
-
-      socket.addEventListener('message', messageHandler);
-
-      // 返回清理函数
-      return () => {
-        socket.removeEventListener('message', messageHandler);
-        if (
-          socket.readyState === WebSocket.OPEN ||
-          socket.readyState === WebSocket.CONNECTING
-        ) {
-          socket._normalClose = true;
-          socket.close();
-        }
-        if (ws === socket) {
+function createSocket$() {
+  console.log('[createSocket$] 创建 socket$ 流');
+  return combineLatest([user$, preferences$]).pipe(
+    switchMap(([user, preferences]) => {
+      console.log('[socket$] switchMap 触发, user:', user, 'preferences:', preferences);
+      if (!user || preferences.disabled) {
+        console.log('[socket$] 条件不满足, user存在:', !!user, 'preferences.disabled:', preferences.disabled);
+        if (ws) {
+          console.log(
+            `禁用开关状态改变为${preferences.disabled} 或用户${user}不存在 导致主动断开socket，`
+          );
+          ws._normalClose = true;
+          ws.close();
           ws = null;
         }
-      };
-    });
-  }),
-  tap(socket => console.log('new socket', socket.id, socket)),
-  shareReplay(1)
-);
-socket$.subscribe();
+        return EMPTY;
+      }
+
+      console.log('[socket$] 准备连接 WebSocket');
+      const socket = connectWebSocket(user);
+      if (!socket) {
+        console.log('[socket$] connectWebSocket 返回 null');
+        return EMPTY;
+      }
+      ws = socket;
+      return new Observable(observer => {
+        const messageHandler = event => {
+          try {
+            const data = JSON.parse(event.data);
+            observer.next(data);
+          } catch (e) {
+            console.error('解析WebSocket消息失败:', e);
+          }
+        };
+
+        socket.addEventListener('message', messageHandler);
+
+        // 返回清理函数
+        return () => {
+          socket.removeEventListener('message', messageHandler);
+          if (
+            socket.readyState === WebSocket.OPEN ||
+            socket.readyState === WebSocket.CONNECTING
+          ) {
+            socket._normalClose = true;
+            socket.close();
+          }
+          if (ws === socket) {
+            ws = null;
+          }
+        };
+      });
+    }),
+    tap(socket => console.log('[socket$] new socket', socket.id, socket)),
+    shareReplay(1)
+  );
+}
+let socketSubscription = null;
+
+function initSocketConnection() {
+  // 取消之前的订阅（如果存在），确保可以重新初始化
+  // 修复：首次安装时 onInstalled 的 500ms 回调中 preferences$ 可能尚未就绪，
+  // 之前的 guard 会阻止 1000ms 兜底重试，导致 socket 永不连接
+  if (socketSubscription) {
+    socketSubscription.unsubscribe();
+    socketSubscription = null;
+  }
+
+  console.log('[initSocketConnection] 准备订阅 socket$');
+  // 延迟创建 socket$ 流，确保数据已设置
+  if (!socket$) {
+    socket$ = createSocket$();
+  }
+
+  // 添加 user$ 和 preferences$ 的订阅日志
+  user$.subscribe(user => console.log('[user$] user 更新:', user));
+  preferences$.subscribe(prefs => console.log('[preferences$] preferences 更新:', prefs));
+
+  socketSubscription = socket$.subscribe();
+  console.log('[initSocketConnection] 已订阅 socket$');
+}
+
+// 在 onInstalled 完成后，手动重新获取 storage 数据，触发流更新
+async function refreshStorage() {
+  console.log('[refreshStorage] 开始重新获取 storage 数据');
+  try {
+    const localStorage = await browser.storage.local.get();
+    const syncStorage = await browser.storage.sync.get();
+    console.log('[refreshStorage] localStorage:', localStorage);
+    console.log('[refreshStorage] syncStorage:', syncStorage);
+
+    // 手动触发重新获取，通过重新设置相同的值来触发 change 事件
+    if (localStorage.env) {
+      await browser.storage.local.set({ env: localStorage.env });
+      console.log('[refreshStorage] 已重新设置 env');
+    }
+    if (syncStorage.preferences) {
+      await browser.storage.sync.set({ preferences: syncStorage.preferences });
+      console.log('[refreshStorage] 已重新设置 preferences');
+    }
+  } catch (error) {
+    console.error('[refreshStorage] 重新获取 storage 失败:', error);
+  }
+}
+
+// 延迟初始化 socket 连接（作为 onInstalled 的安全兜底）
+// 不检查 socketSubscription：首次安装时 500ms 的 initSocketConnection 可能因
+// preferences$ 未就绪而失败，1000ms 兜底调用会取消旧订阅并重试
+setTimeout(() => {
+  console.log('[setTimeout] 检查是否需要初始化 socket');
+  initSocketConnection();
+}, 1000);
 
 // 需要缓存headers用来重放的url
 // 如果只需要监听请求是否发生用这个就行
@@ -420,12 +499,14 @@ async function getTokenFromTip() {
 }
 
 function connectWebSocket(user) {
+  console.log('[connectWebSocket] 开始连接, user:', user);
   if (!user) {
-    console.error('No user available');
+    console.error('[connectWebSocket] No user available');
     return null;
   }
 
   const wsUrl = `${WS_SERVER}/ws?token=${user.token}`;
+  console.log('[connectWebSocket] WebSocket URL:', wsUrl);
   const socket = new WebSocket(wsUrl);
   let reconnectTimeout;
   let reconnectAttempts = 0;
@@ -437,12 +518,12 @@ function connectWebSocket(user) {
   const maxReconnectDelay = 10000; // 最大重连延迟10秒
 
   socket.onopen = () => {
-    console.log(`Connected to WebSocket server ${user.tenantAlias}`);
+    console.log(`[connectWebSocket] Connected to WebSocket server ${user.tenantAlias}`);
     socket._durationTimer = setInterval(() => {
       if (socket && socket._connectTime) {
         const duration = Date.now() - socket._connectTime;
         console.log(
-          `当前连接持续时间: ${formatDuration(duration)} tenantAlias: ${user.tenantAlias}`
+          `[connectWebSocket] 当前连接持续时间: ${formatDuration(duration)} tenantAlias: ${user.tenantAlias}`
         );
       }
     }, 120000); // 每2分钟打印一次
@@ -453,34 +534,35 @@ function connectWebSocket(user) {
         token: user.token,
       })
     );
+    console.log('[connectWebSocket] 已发送 auth 消息');
   };
 
   socket.onmessage = async event => {
     const message = JSON.parse(event.data);
-    console.log('Received:', message);
+    console.log('[connectWebSocket] Received:', message);
     await handleWebSocketMessage(message);
   };
 
   socket.onerror = error => {
-    console.error('WebSocket error:', error);
+    console.error('[connectWebSocket] WebSocket error:', error);
   };
 
   socket.onclose = event => {
     if (socket && socket._connectTime) {
       const duration = Date.now() - socket._connectTime;
       console.log(
-        `连接结束当前连接持续时间: ${formatDuration(duration)} tenantAlias: ${user.tenantAlias}`
+        `[connectWebSocket] 连接结束当前连接持续时间: ${formatDuration(duration)} tenantAlias: ${user.tenantAlias}`
       );
     }
     clearInterval(socket._durationTimer);
     console.log(
-      `WebSocket closed with code ${event.code}. Clean: ${event.wasClean} tenantAlias: ${user.tenantAlias}`
+      `[connectWebSocket] WebSocket closed with code ${event.code}. Clean: ${event.wasClean} tenantAlias: ${user.tenantAlias}`
     );
 
     // 只有客户端主动正常关闭（_normalClose）才不重连；服务端部署/代理关闭也要重连
     if (socket._normalClose) {
       console.log(
-        `WebSocket closed normally by client, not attempting to reconnect tenantAlias: ${user.tenantAlias}`
+        `[connectWebSocket] WebSocket closed normally by client, not attempting to reconnect tenantAlias: ${user.tenantAlias}`
       );
       return;
     }
@@ -488,7 +570,7 @@ function connectWebSocket(user) {
     // 如果超过最大重试次数，不再重连
     if (reconnectAttempts >= maxReconnectAttempts) {
       console.log(
-        `Max reconnection attempts reached, giving up tenantAlias: ${user.tenantAlias}`
+        `[connectWebSocket] Max reconnection attempts reached, giving up tenantAlias: ${user.tenantAlias}`
       );
       return;
     }
@@ -499,14 +581,14 @@ function connectWebSocket(user) {
       maxReconnectDelay
     );
     console.log(
-      `Attempting to reconnect in ${nextDelay}ms... tenantAlias: ${user.tenantAlias}`
+      `[connectWebSocket] Attempting to reconnect in ${nextDelay}ms... tenantAlias: ${user.tenantAlias}`
     );
 
     clearTimeout(reconnectTimeout);
     reconnectTimeout = setTimeout(() => {
       reconnectAttempts++;
       console.log(
-        `Reconnection attempt ${reconnectAttempts} of ${maxReconnectAttempts} tenantAlias: ${user.tenantAlias}`
+        `[connectWebSocket] Reconnection attempt ${reconnectAttempts} of ${maxReconnectAttempts} tenantAlias: ${user.tenantAlias}`
       );
       ws = connectWebSocket(user);
     }, nextDelay);
@@ -660,7 +742,14 @@ async function handleWebSocketMessage(message) {
     case 'OpenTabAction':
       if (message.url) {
         try {
-          const tab = await browser.tabs.create({ url: message.url, active: message.active !== false });
+          // 找一个 normal 窗口，避免 tab 落在 popup/devtools 窗口里导致 group 失败
+          const windows = await browser.windows.getAll({ populate: false });
+          const normalWindow = windows.find(w => w.type === 'normal');
+          const tab = await browser.tabs.create({
+            url: message.url,
+            active: message.active !== false,
+            windowId: normalWindow?.id,
+          });
           const tabId = tab.id;
           console.log('Tab created:', tab);
 

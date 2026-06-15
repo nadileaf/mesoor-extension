@@ -6,6 +6,7 @@ import {
   scan,
   shareReplay,
   switchMap,
+  tap,
 } from 'rxjs/operators';
 import type { Cookies } from 'webextension-polyfill';
 import browser from 'webextension-polyfill';
@@ -19,8 +20,10 @@ import { onCookiesChange$ } from './stream';
 export const fromStorage$ = from(
   browser.storage.local.get('env') as Promise<LocalStorage>
 ).pipe(
+  tap(storage => console.log('[user$ fromStorage$] 获取到 storage:', storage)),
   filter(storage => !!storage.env),
-  map(storage => storage.env!)
+  map(storage => storage.env!),
+  tap(env => console.log('[user$ fromStorage$] 提取出 env:', env))
 );
 
 const envChange$ = localstorageChange$.pipe(

@@ -1,20 +1,28 @@
 import { from, concat, of } from 'rxjs';
-import { filter, map, shareReplay, catchError } from 'rxjs/operators';
+import { filter, map, shareReplay, catchError, tap } from 'rxjs/operators';
 import {
   syncstorageChange$,
   localstorageChange$,
   safeStorageGet,
 } from '../models/storage';
 
+// 当 storage 中不存在 preferences 时使用的默认值，
+// 确保 preferences$ 一定发出值，避免 combineLatest 被永久阻塞
+const defaultPreferences = { version: 1, disabled: false };
+
 // preferences$
 export const fromStorage$ = from(safeStorageGet('sync', 'preferences')).pipe(
-  filter(storage => !!storage.preferences),
-  map(storage => storage.preferences!),
+  tap(storage =>
+    console.log('[preferences$ fromStorage$] 获取到 storage:', storage)
+  ),
+  map(storage => storage.preferences || defaultPreferences),
+  tap(prefs =>
+    console.log('[preferences$ fromStorage$] 提取出 preferences:', prefs)
+  ),
   catchError(error => {
     console.error('Error getting preferences from storage:', error);
-    return of(null);
+    return of(defaultPreferences);
   }),
-  filter(Boolean)
 );
 
 const preferencesChange$ = syncstorageChange$.pipe(
