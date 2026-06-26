@@ -5,6 +5,11 @@ interface ImportMetaEnv {
   readonly VITE_BACKGROUND_SERVER_HOST: string;
   readonly VITE_TOKEN_HOST: string;
   readonly VITE_SPACE_SERVER: string;
+  readonly VITE_ENABLE_SOCKET_CONNECTION?: string;
+  readonly VITE_ENABLE_AUTO_SYNC_RESUME?: string;
+  readonly VITE_ENABLE_AUTO_LINKEDIN_EMAIL?: string;
+  readonly VITE_DISABLE_RESUME_SYNC?: string;
+  readonly VITE_HIDE_SETTINGS_PANEL?: string;
   readonly VITE_ENTITY_ROUTE_MODE?: 'legacy_query' | 'app_path';
   readonly VITE_FRONTEND_HOST?: string;
   readonly VITE_LOCALHOST_API_HOST?: string;

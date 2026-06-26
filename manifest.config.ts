@@ -26,6 +26,7 @@ export default defineManifest({
     'desktopCapture',
     'cookies',
     'storage',
+    'alarms',
   ],
   host_permissions: [
     '<all_urls>',

@@ -60,6 +60,12 @@ const spaceServer = import.meta.env.VITE_SPACE_SERVER;
 const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
 const enableSocketConnection =
   import.meta.env.VITE_ENABLE_SOCKET_CONNECTION === 'true';
+const enableAutoSyncResume =
+  import.meta.env.VITE_ENABLE_AUTO_SYNC_RESUME === 'true';
+const enableAutoLinkedInEmail =
+  import.meta.env.VITE_ENABLE_AUTO_LINKEDIN_EMAIL === 'true';
+const disableResumeSync =
+  import.meta.env.VITE_DISABLE_RESUME_SYNC === 'true';
 const defaultEnv = import.meta.env.VITE_DOMAIN_HOST;
 const extensionDefaultToken =
   import.meta.env.VITE_EXTENSION_DEFAULT_TOKEN?.trim();
@@ -72,6 +78,9 @@ console.log('环境变量生效配置:', {
   spaceServer,
   EntityExecuteHost,
   enableSocketConnection,
+  enableAutoSyncResume,
+  enableAutoLinkedInEmail,
+  disableResumeSync,
 });
 // 使用{0}表示entityType，{1}表示openId
 const syncEntityResultCheckUrl =
@@ -118,12 +127,14 @@ browser.runtime.onInstalled.addListener(async detail => {
 
   if (!storage.wait) {
     // isSyncWait 为 true 是用户手动同步
-    await browser.storage.sync.set({ wait: { isSyncWait: false } });
+    await browser.storage.sync.set({
+      wait: { isSyncWait: disableResumeSync ? true : !enableAutoSyncResume },
+    });
   }
 
   if (!storage.linkedInEmailWait) {
     // isEmailWait 为 false 是自动弹出邮件框
-    await browser.storage.sync.set({ linkedInEmailWait: { isEmailWait: false } });
+    await browser.storage.sync.set({ linkedInEmailWait: { isEmailWait: !enableAutoLinkedInEmail } });
   }
 
   await browser.storage.local.set({ env: defaultEnv, activities: {} });
@@ -136,6 +147,10 @@ browser.runtime.onInstalled.addListener(async detail => {
     await refreshStorage(); // 先刷新 storage，触发流更新
     initSocketConnection();
   }, 500);
+
+  // 创建周期 alarm，确保 SW 被终止后也能被唤醒检查 socket
+  // MV3 中 cookies.onChanged 无法唤醒 SW，依赖 alarm 做兜底
+  browser.alarms.create('checkSocketConnection', { periodInMinutes: 1 });
 });
 wait$.subscribe(waitState => {
   wait = waitState.isSyncWait;
@@ -382,6 +397,22 @@ setTimeout(() => {
   console.log('[setTimeout] 检查是否需要初始化 socket');
   initSocketConnection();
 }, 1000);
+
+// 周期 alarm：应对 SW 被 Chrome 终止后 cookie 变化无法唤醒 SW 的场景
+// 每分钟检查一次，如果已有连接则 initSocketConnection 内部 unsubscribe+重订阅（幂等）
+browser.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'checkSocketConnection') {
+    console.log('[alarm] 定时检查 socket 连接');
+    initSocketConnection();
+  }
+});
+
+// SW 重启时（非首次安装），onInstalled 不触发，需要模块级保底创建 alarm
+browser.alarms.get('checkSocketConnection').then(alarm => {
+  if (!alarm) {
+    browser.alarms.create('checkSocketConnection', { periodInMinutes: 1 });
+  }
+});
 
 // 需要缓存headers用来重放的url
 // 如果只需要监听请求是否发生用这个就行
@@ -2709,6 +2740,7 @@ async function injectButton2dify(url, tabId, config, jobId, resumeId) {
 
 const maimaiResumeLast$ = maimaiResume$.pipe(
   filter(details => details.tabId !== -1),
+  filter(() => !disableResumeSync), // 添加环境变量检查
   tap(details => {
     console.log('maimaiResume details', details);
   }),
@@ -2966,6 +2998,12 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   //   console.log('step 2.0 cacheHeaders details', details);
   // }),
   mergeMap(async details => {
+    // 强制禁用：如果环境变量禁用，直接返回，不执行任何重放逻辑
+    if (disableResumeSync) {
+      console.log('[resumeSendHeadersV2Base] 环境变量已禁用简历收录，跳过重放');
+      return of();
+    }
+
     // 手动模式下：先等待用户确认，再执行重放
     let preconfirmed = false;
     let preconfirmedRequestId = null;

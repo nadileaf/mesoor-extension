@@ -21,6 +21,8 @@ interface AppSidebarProps {
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const enableSourcingChat =
     import.meta.env.VITE_ENABLE_SOURCING_CHAT !== 'false';
+  const hideSettingsPanel =
+    import.meta.env.VITE_HIDE_SETTINGS_PANEL === 'true';
 
   const navItems = [
     ...(enableSourcingChat
@@ -32,11 +34,15 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           },
         ]
       : []),
-    {
-      id: 'settings' as TabType,
-      icon: Settings,
-      label: '设置',
-    },
+    ...(hideSettingsPanel
+      ? []
+      : [
+          {
+            id: 'settings' as TabType,
+            icon: Settings,
+            label: '设置',
+          },
+        ]),
   ];
 
   return (
