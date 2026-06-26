@@ -5,7 +5,7 @@ const iconPath = process.env.VITE_ICON_PATH || 'public/logo.png';
 
 export default defineManifest({
   manifest_version: 3,
-  name: pkg.name,
+  name: process.env.VITE_EXTENSION_NAME || pkg.name,
   version: pkg.version,
   icons: {
     // @ts-expect-error - CRXJS defineManifest 类型定义不支持动态路径，但运行时正常工作

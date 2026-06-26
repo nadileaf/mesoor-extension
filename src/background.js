@@ -2994,16 +2994,18 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   needCacheHeadersUrl
 ).pipe(
   filter(details => details.tabId !== -1 && details.method !== 'OPTIONS'),
+  // 强制禁用：如果环境变量禁用，直接在 filter 层拦截，不让事件进入 mergeMap
+  filter(() => {
+    if (disableResumeSync) {
+      console.log('[resumeSendHeadersV2Base] 环境变量已禁用简历收录，跳过重放');
+      return false;
+    }
+    return true;
+  }),
   // tap(details => {
   //   console.log('step 2.0 cacheHeaders details', details);
   // }),
   mergeMap(async details => {
-    // 强制禁用：如果环境变量禁用，直接返回，不执行任何重放逻辑
-    if (disableResumeSync) {
-      console.log('[resumeSendHeadersV2Base] 环境变量已禁用简历收录，跳过重放');
-      return of();
-    }
-
     // 手动模式下：先等待用户确认，再执行重放
     let preconfirmed = false;
     let preconfirmedRequestId = null;
@@ -3027,7 +3029,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         preconfirmedRequestId
       );
       if (!confirmed) {
-        return;
+        return EMPTY;
       }
     }
     // 必须的延迟，否则会出错

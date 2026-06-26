@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
   // 动态设置环境变量供 manifest.config.ts 使用
   process.env.VITE_ICON_PATH = env.VITE_ICON_PATH;
   process.env.VITE_NOTIFICATION_ICON = env.VITE_NOTIFICATION_ICON;
+  process.env.VITE_EXTENSION_NAME = env.VITE_EXTENSION_NAME;
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const manifest = require('./manifest.config.ts').default;
@@ -28,7 +29,7 @@ export default defineConfig(({ mode }) => {
       crx({ manifest }),
       zip({
         outDir: 'release',
-        outFileName: `crx-${name}-${version}-${mode}.zip`,
+        outFileName: `crx-${env.VITE_EXTENSION_SLUG || name}-${mode}-v${version}.zip`,
       }),
     ],
     server: {
