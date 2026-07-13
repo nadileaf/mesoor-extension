@@ -20,7 +20,9 @@ function App() {
         {hideSettingsPanel ? (
           <ChatContainer />
         ) : activeTab === 'Sourcing' ? (
-          <ChatContainer />
+          <ChatContainer
+            onNavigateToSettings={() => setActiveTab('settings')}
+          />
         ) : (
           <SettingsContainer />
         )}

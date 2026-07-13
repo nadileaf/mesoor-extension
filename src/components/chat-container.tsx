@@ -132,7 +132,13 @@ function parseJwt(token: string) {
   }
 }
 
-const ChatContainer: React.FC = () => {
+interface ChatContainerProps {
+  onNavigateToSettings?: () => void;
+}
+
+const ChatContainer: React.FC<ChatContainerProps> = ({
+  onNavigateToSettings,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -168,14 +174,29 @@ const ChatContainer: React.FC = () => {
             authMode === 'storage_token'
               ? '请先在设置中创建用户'
               : '请先登录 tip.mesoor.com';
+          const showSettingsBtn = authMode === 'storage_token';
           containerRef.current.innerHTML = `
             <div class="flex items-center justify-center h-full">
               <div class="text-center">
                 <div class="text-gray-500 mb-2 text-2xl">⚠️</div>
                 <div class="text-gray-600 text-base">${errorMessage}</div>
+                ${
+                  showSettingsBtn
+                    ? `<button id="go-to-settings-btn" class="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors">去设置</button>`
+                    : ''
+                }
               </div>
             </div>
           `;
+          if (showSettingsBtn) {
+            setTimeout(() => {
+              containerRef.current
+                ?.querySelector('#go-to-settings-btn')
+                ?.addEventListener('click', () => {
+                  onNavigateToSettings?.();
+                });
+            }, 0);
+          }
           return;
         }
 
