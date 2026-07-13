@@ -552,6 +552,7 @@ const SettingsContainer: React.FC = () => {
         )}
 
         {/* 简历同步设置 */}
+        {import.meta.env.VITE_HIDE_RESUME_SYNC !== 'true' && (
         <Card className="gap-4">
           <CardHeader>
             <CardTitle className="text-lg flex items-center">
@@ -623,8 +624,10 @@ const SettingsContainer: React.FC = () => {
             </div> */}
           </CardContent>
         </Card>
+        )}
 
         {/* 版本信息 */}
+        {import.meta.env.VITE_HIDE_VERSION_INFO !== 'true' && (
         <Card className="gap-4">
           <CardHeader>
             <CardTitle className="text-lg flex items-center">
@@ -658,8 +661,10 @@ const SettingsContainer: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* 帮助信息 */}
+        {import.meta.env.VITE_HIDE_USAGE_TIPS !== 'true' && (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="">
             <div className="flex items-start">
@@ -675,6 +680,7 @@ const SettingsContainer: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* 更新确认对话框 */}

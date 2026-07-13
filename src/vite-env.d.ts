@@ -10,6 +10,9 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_AUTO_LINKEDIN_EMAIL?: string;
   readonly VITE_DISABLE_RESUME_SYNC?: string;
   readonly VITE_HIDE_SETTINGS_PANEL?: string;
+  readonly VITE_HIDE_RESUME_SYNC?: string;
+  readonly VITE_HIDE_VERSION_INFO?: string;
+  readonly VITE_HIDE_USAGE_TIPS?: string;
   readonly VITE_ENTITY_ROUTE_MODE?: 'legacy_query' | 'app_path';
   readonly VITE_FRONTEND_HOST?: string;
   readonly VITE_LOCALHOST_API_HOST?: string;
