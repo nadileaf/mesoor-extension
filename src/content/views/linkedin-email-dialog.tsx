@@ -40,7 +40,9 @@ const LinkedInEmailDialog: React.FC = () => {
     };
 
     const handleGenerating = () => {
-      console.log('[LinkedIn Email Dialog] 收到 generating 事件，显示 loading 状态');
+      console.log(
+        '[LinkedIn Email Dialog] 收到 generating 事件，显示 loading 状态'
+      );
       setIsVisible(true);
       setIsGenerating(true);
     };
@@ -62,10 +64,7 @@ const LinkedInEmailDialog: React.FC = () => {
 
     return () => {
       window.removeEventListener('linkedin-email-show', handleShow);
-      window.removeEventListener(
-        'linkedin-email-generating',
-        handleGenerating
-      );
+      window.removeEventListener('linkedin-email-generating', handleGenerating);
       browser.runtime.onMessage.removeListener(handleMessage);
     };
   }, []);
@@ -95,8 +94,11 @@ const LinkedInEmailDialog: React.FC = () => {
 
     try {
       setIsGenerating(true);
-      console.log('[LinkedIn Email Dialog] 重新生成邮件，使用数据:', mailConfig);
-      
+      console.log(
+        '[LinkedIn Email Dialog] 重新生成邮件，使用数据:',
+        mailConfig
+      );
+
       const message = {
         requestId: uuid(),
         type: 'linkedin-email-generate',
@@ -112,7 +114,7 @@ const LinkedInEmailDialog: React.FC = () => {
 
       console.log('[LinkedIn Email Dialog] 发送重新生成消息:', message);
       await browser.runtime.sendMessage(message);
-      
+
       // 不再使用超时自动关闭，等待 update-mail-content 消息
     } catch (error) {
       console.error('[LinkedIn Email] 重新生成失败:', error);
@@ -155,7 +157,9 @@ const LinkedInEmailDialog: React.FC = () => {
           {isGenerating ? (
             <div className="loading-container">
               <div className="loading-spinner"></div>
-              <p className="loading-text">正在生成邮件内容，大约一分钟，请稍候...</p>
+              <p className="loading-text">
+                正在生成邮件内容，大约一分钟，请稍候...
+              </p>
               <div className="skeleton-form">
                 <div className="skeleton-line skeleton-short"></div>
                 <div className="skeleton-line skeleton-medium"></div>

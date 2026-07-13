@@ -21,8 +21,7 @@ interface AppSidebarProps {
 export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   const enableSourcingChat =
     import.meta.env.VITE_ENABLE_SOURCING_CHAT !== 'false';
-  const hideSettingsPanel =
-    import.meta.env.VITE_HIDE_SETTINGS_PANEL === 'true';
+  const hideSettingsPanel = import.meta.env.VITE_HIDE_SETTINGS_PANEL === 'true';
 
   const navItems = [
     ...(enableSourcingChat

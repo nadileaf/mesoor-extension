@@ -22,7 +22,7 @@ export const fromStorage$ = from(safeStorageGet('sync', 'preferences')).pipe(
   catchError(error => {
     console.error('Error getting preferences from storage:', error);
     return of(defaultPreferences);
-  }),
+  })
 );
 
 const preferencesChange$ = syncstorageChange$.pipe(

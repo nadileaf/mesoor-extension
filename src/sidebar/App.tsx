@@ -9,8 +9,7 @@ export type TabType = 'Sourcing' | 'settings';
 function App() {
   const enableSourcingChat =
     import.meta.env.VITE_ENABLE_SOURCING_CHAT !== 'false';
-  const hideSettingsPanel =
-    import.meta.env.VITE_HIDE_SETTINGS_PANEL === 'true';
+  const hideSettingsPanel = import.meta.env.VITE_HIDE_SETTINGS_PANEL === 'true';
   const [activeTab, setActiveTab] = useState<TabType>(
     enableSourcingChat ? 'Sourcing' : 'settings'
   );
@@ -20,8 +19,10 @@ function App() {
       <div className="w-full h-full overflow-hidden">
         {hideSettingsPanel ? (
           <ChatContainer />
+        ) : activeTab === 'Sourcing' ? (
+          <ChatContainer />
         ) : (
-          activeTab === 'Sourcing' ? <ChatContainer /> : <SettingsContainer />
+          <SettingsContainer />
         )}
       </div>
     </Layout>
