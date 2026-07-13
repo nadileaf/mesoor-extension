@@ -171,8 +171,8 @@ const ChatContainer: React.FC = () => {
           containerRef.current.innerHTML = `
             <div class="flex items-center justify-center h-full">
               <div class="text-center">
-                <div class="text-gray-500 mb-2">⚠️</div>
-                <div class="text-gray-600">${errorMessage}</div>
+                <div class="text-gray-500 mb-2 text-2xl">⚠️</div>
+                <div class="text-gray-600 text-base">${errorMessage}</div>
               </div>
             </div>
           `;
