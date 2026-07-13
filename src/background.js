@@ -463,6 +463,8 @@ const needCacheHeadersUrl = [
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
   // 58同城-简历详情
   '*://jianli.58.com/resumedetail/v2/single*',
+  // 脉脉-招人搜索
+  '*://maimai.cn/sdk/jobs/anti_automation/talent/basic*',
 ];
 // 需要缓存headers用来重放的url但是不需要拿附件的,是needCacheHeadersUrl的子集
 const needCacheHeadersUrlSubStream = [
@@ -496,6 +498,7 @@ const maimaiResume$ = RequestListen.install([
   '*://maimai.cn/api/ent/talent/basic*',
   // 不知道是啥，直接迁移过来了
   '*://maimai.cn/jobs/jobs_resume*',
+  '*://maimai.cn/sdk/jobs/anti_automation/talent/basic*'
 ]);
 
 // 拉勾招聘页面中简历管理页面的简历手抓
@@ -2320,8 +2323,15 @@ async function handleScreenShot(message) {
 
 // 处理来自content script或popup的消息
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('[onMessage] 收到消息:', request.type, 'from:', sender.tab?.url || sender.id);
+  
   if (request.type === 'pingMesoorExtension') {
     sendResponse({ message: 'pingMesoorExtensionSuccess' });
+  }
+
+  if (request.type === 'sync-resume-feedback') {
+    console.log('[sync-resume-feedback] 收到简历同步反馈消息');
+    sendResponse({ success: true });
   }
 
   if (
@@ -2361,6 +2371,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     return true;
   } else if (request.type === 'check-job-des') {
+    console.log('[check-job-des] 开始处理，将返回 true 进行异步响应');
     console.log('处理检查职位描述', JSON.stringify(request));
     const tabId = sender.tab.id;
 
@@ -2738,62 +2749,6 @@ async function injectButton2dify(url, tabId, config, jobId, resumeId) {
 
 // 简历收录部分
 
-const maimaiResumeLast$ = maimaiResume$.pipe(
-  filter(details => details.tabId !== -1),
-  filter(() => !disableResumeSync), // 添加环境变量检查
-  tap(details => {
-    console.log('maimaiResume details', details);
-  }),
-  mergeMap(async details => {
-    await delay(1500);
-    const resp = await request(details.url);
-    let fileContentB64 = null;
-    let fileRespHeaders = null;
-    const data = await resp.json();
-    if (data?.data?.resume?.file_url) {
-      const fileResp = await request(data.data.resume.file_url);
-      fileRespHeaders = {};
-      fileResp.headers.forEach((value, key) => {
-        fileRespHeaders[key] = value;
-      });
-      const blob = await fileResp.blob();
-      fileContentB64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => {
-          if (typeof reader.result === 'string') {
-            resolve(reader.result.split(',')[1]);
-          } else {
-            resolve('');
-          }
-        };
-      });
-    }
-    const body = {
-      jsonBody: data,
-      requestURL: details.url,
-      fileContentB64: fileContentB64
-        ? [
-            {
-              fileContentB64: fileContentB64,
-              type: 'resumeAttachment',
-              responseHeaders: fileRespHeaders,
-            },
-          ]
-        : null,
-    };
-    return {
-      details,
-      body,
-    };
-  }),
-  catchError(error => {
-    console.error('lagouResume错误:', error);
-    return of();
-  }),
-  retry()
-);
-
 // const lagouResumeReplay$ = lagouResume$.pipe(
 //   filter(details => details.tabId !== -1),
 //   tap(details => {
@@ -3137,6 +3092,69 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   retry(),
   share()
 );
+
+// 脉脉请求重放流 - 使用缓存的请求头（x-csrf-token, x-ent-token）
+const maimaiResumeReplay$ = resumeSendHeadersV2Base$.pipe(
+  filter(({ details }) => {
+    return details.url.includes('maimai.cn/sdk/jobs/anti_automation/talent/basic');
+  }),
+  map(response => {
+    const { details, replayResponse, headers } = response;
+    return { details, replayResponse, headers };
+  }),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    let fileContentB64 = null;
+    let fileRespHeaders = null;
+    
+    // 如果有简历附件URL，下载附件
+    if (replayResponse?.data?.resume?.file_url) {
+      try {
+        const fileResp = await request(replayResponse.data.resume.file_url, {
+          headers: headers,
+        });
+        fileRespHeaders = {};
+        fileResp.headers.forEach((value, key) => {
+          fileRespHeaders[key] = value;
+        });
+        const blob = await fileResp.blob();
+        fileContentB64 = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              resolve(reader.result.split(',')[1]);
+            } else {
+              resolve('');
+            }
+          };
+        });
+      } catch (error) {
+        console.error('下载脉脉简历附件失败:', error);
+      }
+    }
+    
+    const body = {
+      jsonBody: replayResponse,
+      url: details.url,
+      fileContentB64: fileContentB64
+        ? [
+            {
+              fileContentB64: fileContentB64,
+              type: 'resumeAttachment',
+              responseHeaders: fileRespHeaders,
+            },
+          ]
+        : null,
+    };
+    return { details, headers, body };
+  }),
+  catchError(error => {
+    console.error('maimaiResumeReplay错误:', error);
+    return of();
+  }),
+  retry()
+);
+
 // 互动+推荐
 const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => {
@@ -3963,8 +3981,8 @@ const mergedResume$ = merge(
   // lagouCommunicationLastResume$,
   // 智联: 简历流 含附件
   zhilianAttachmentResume$,
-  // 脉脉: 简历流 含附件
-  maimaiResumeLast$,
+  // 脉脉: 简历流 含附件（使用请求重放）
+  maimaiResumeReplay$,
   // 多猎: 实习僧:  无附件
   resumeSendHeadersV2BaseSub$,
   // boss沟通

@@ -1,7 +1,7 @@
 {
   "name": "mesoor-extention-for-tip",
   "type": "module",
-  "version": "1.3.4",
+  "version": "1.3.6",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -14,10 +14,12 @@
     "dev:app-cgl": "vite --mode app-cgl",
     "dev:tip-cgl": "vite --mode tip-cgl",
     "dev:app-fsg": "vite --mode app-fsg",
+    "dev:app-fsghejie": "vite --mode app-fsghejie",
     "build:app-production": "tsc -b && vite build --mode app-production",
     "build:app-development": "tsc -b && vite build --mode app-development",
     "build:app-cgl": "tsc -b && vite build --mode app-cgl",
     "build:app-fsg": "tsc -b && vite build --mode app-fsg",
+    "build:app-fsghejie": "tsc -b && vite build --mode app-fsghejie",
     "build:tip-cgl": "tsc -b && vite build --mode tip-cgl",
     "build:inzight-development": "tsc -b && vite build --mode inzight-development",
     "build": "tsc -b && vite build",

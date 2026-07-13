@@ -10,11 +10,12 @@ import {
 } from 'rxjs/operators';
 import type { Cookies } from 'webextension-polyfill';
 import browser from 'webextension-polyfill';
-import { LocalStorage, TipUser } from '../interfaces/storage.ts';
+import { LocalStorage, TipUser, FSGUser } from '../interfaces/storage.ts';
 
 import { parseJwt } from '../utils/user-utils';
 import { localstorageChange$ } from './storage';
 import { onCookiesChange$ } from './stream';
+import { isTokenExpired } from '../utils/fsg-user-utils';
 
 // env$
 export const fromStorage$ = from(
@@ -50,7 +51,15 @@ const extensionDefaultToken =
 // 'sub': JWT sub字段变化时重连（适合token频繁刷新的环境）
 const wsIdentityKey = import.meta.env.VITE_WS_IDENTITY_KEY || 'token';
 
+// 鉴权模式：cookie | storage_token
+const authMode = import.meta.env.VITE_AUTH_MODE || 'cookie';
+
 function compareUserIdentity(pre: TipUser, cur: TipUser): boolean {
+  // 先比较租户信息，租户变化必须重连
+  if (pre.tenantAlias !== cur.tenantAlias || pre.tenantId !== cur.tenantId) {
+    return false;
+  }
+
   if (wsIdentityKey === 'sub') {
     if (pre.sub && cur.sub) {
       return pre.sub === cur.sub;
@@ -131,6 +140,42 @@ const cookieUser$ = env$.pipe(
   }, {})
 );
 
+// Storage token 模式：从 chrome.storage.local.fsgUser 读取 token
+const storageUser$ = concat(
+  from(browser.storage.local.get('fsgUser') as Promise<LocalStorage>).pipe(
+    tap(storage => console.log('[storageUser$] 获取到 storage:', storage)),
+    map(storage => storage.fsgUser),
+    tap(fsgUser => console.log('[storageUser$] 提取出 fsgUser:', fsgUser))
+  ),
+  localstorageChange$.pipe(
+    filter(([change]) => !!change.fsgUser),
+    map(([change]) => (change.fsgUser as { newValue?: FSGUser }).newValue)
+  )
+).pipe(
+  map((fsgUser: FSGUser | undefined): TipUser | null => {
+    if (!fsgUser) {
+      console.log('[storageUser$] fsgUser 不存在，返回 null');
+      return null;
+    }
+
+    // 检查 token 是否过期
+    if (isTokenExpired(fsgUser.token)) {
+      console.log('[storageUser$] token 已过期，返回 null');
+      return null;
+    }
+
+    // 解析 JWT 获取用户信息
+    const jwtPayload = parseJwt(fsgUser.token);
+    console.log('[storageUser$] 解析 JWT payload:', jwtPayload);
+
+    return {
+      ...jwtPayload,
+      token: fsgUser.token,
+    };
+  }),
+  tap(user => console.log('[storageUser$] 最终用户对象:', user))
+);
+
 export const user$ = extensionDefaultToken
   ? of({
       ...parseJwt(extensionDefaultToken),
@@ -140,11 +185,18 @@ export const user$ = extensionDefaultToken
       distinctUntilChanged(compareUserIdentity),
       shareReplay(1)
     )
-  : cookieUser$.pipe(
-      filter(isUser),
-      distinctUntilChanged(compareUserIdentity),
-      shareReplay(1)
-    );
+  : authMode === 'storage_token'
+    ? storageUser$.pipe(
+        filter((user): user is TipUser => user !== null),
+        filter(isUser),
+        distinctUntilChanged(compareUserIdentity),
+        shareReplay(1)
+      )
+    : cookieUser$.pipe(
+        filter(isUser),
+        distinctUntilChanged(compareUserIdentity),
+        shareReplay(1)
+      );
 
 export const isLogin = async (env: string): Promise<Map<string, string>> => {
   const cookies = await browser.cookies.getAll(getCookieQuery(env));
@@ -164,7 +216,10 @@ export const userCookieCheck$ = combineLatest(
 ) // 启动后的十秒，以及之后的每小时检测一次
   .pipe(
     switchMap(async ([env]) => {
-      const _isLogin = await isLogin(env!);
+      if (!env) {
+        return false;
+      }
+      const _isLogin = await isLogin(env);
       return _isLogin.size === 1;
     })
   );
@@ -177,7 +232,11 @@ export const clearUserCookie = () => {
   return new Promise((resolve, reject) => {
     const envSubscribe = env$.subscribe(async env => {
       try {
-        const domain = env!;
+        if (!env) {
+          reject(new Error('env is not available'));
+          return;
+        }
+        const domain = env;
 
         await Promise.all(
           tokenCookieNames.map(name =>

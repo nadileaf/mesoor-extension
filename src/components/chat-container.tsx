@@ -140,28 +140,39 @@ const ChatContainer: React.FC = () => {
       if (!containerRef.current) return;
 
       try {
-        // 从tip.mesoor.com获取token
-
-        // const token = await (window as any).browser?.cookies?.get({
         const browserAPI = await ensureBrowserAPI();
-        const token = await browserAPI?.cookies?.get({
-          url: 'https://tip.mesoor.com',
-          name: 'token',
-        });
+        const authMode = import.meta.env.VITE_AUTH_MODE;
+        let _token;
 
-        const _token =
-          token?.value ||
-          import.meta.env.VITE_LOCAL_TOKEN ||
-          'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VybmFtZTrliJjmlY_lqZUiLCJ0ZW5hbnRNZW1iZXIiOiJzaGFuZ2hhaWRlemh1cWl5ZWd1YW5saS0xODhUNTAxMTNiZjYtYjA5YS00M2Y2LWJiZmUtMGRmYjg3ZTNkOTI4IiwidGVuYW50SWQiOjE4OCwiaXNzIjoiZGVmYXVsdCIsInRlbmFudEFsaWFzIjoic2hhbmdoYWlkZXpodXFpeWVndWFubGktMTg4IiwiZXhwIjoxNzYxMTAzMTQyMDg0LCJ1c2VySWQiOiI1MDExM2JmNi1iMDlhLTQzZjYtYmJmZS0wZGZiODdlM2Q5MjgiLCJwcm9qZWN0SWQiOiJkZWZhdWx0IiwiaWF0IjoxNzUzMzI3MTQyMDg0fQ.EFHYDoBFJpwbw8pdMCB-TaZRRCbGFAiW8Qnyl0BPtQs';
-        console.log('token', _token);
+        if (authMode === 'storage_token') {
+          // 从 storage 读取 token
+          const fsgUser = await browserAPI?.storage?.local?.get('fsgUser');
+          _token = fsgUser?.fsgUser?.token;
+          console.log('[storage_token mode] token from storage:', _token);
+        } else {
+          // 从 cookie 读取 token（原有逻辑）
+          const token = await browserAPI?.cookies?.get({
+            url: 'https://tip.mesoor.com',
+            name: 'token',
+          });
+          _token =
+            token?.value ||
+            import.meta.env.VITE_LOCAL_TOKEN ||
+            'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VybmFtZTrliJjmlY_lqZUiLCJ0ZW5hbnRNZW1iZXIiOiJzaGFuZ2hhaWRlemh1cWl5ZWd1YW5saS0xODhUNTAxMTNiZjYtYjA5YS00M2Y2LWJiZmUtMGRmYjg3ZTNkOTI4IiwidGVuYW50SWQiOjE4OCwiaXNzIjoiZGVmYXVsdCIsInRlbmFudEFsaWFzIjoic2hhbmdoYWlkZXpodXFpeWVndWFubGktMTg4IiwiZXhwIjoxNzYxMTAzMTQyMDg0LCJ1c2VySWQiOiI1MDExM2JmNi1iMDlhLTQzZjYtYmJmZS0wZGZiODdlM2Q5MjgiLCJwcm9qZWN0SWQiOiJkZWZhdWx0IiwiaWF0IjoxNzUzMzI3MTQyMDg0fQ.EFHYDoBFJpwbw8pdMCB-TaZRRCbGFAiW8Qnyl0BPtQs';
+          console.log('[cookie mode] token from cookie:', _token);
+        }
 
         if (!_token) {
-          console.error('No token found plz login tip');
+          console.error('No token found');
+          const errorMessage =
+            authMode === 'storage_token'
+              ? '请先在设置中创建用户'
+              : '请先登录 tip.mesoor.com';
           containerRef.current.innerHTML = `
             <div class="flex items-center justify-center h-full">
               <div class="text-center">
                 <div class="text-gray-500 mb-2">⚠️</div>
-                <div class="text-gray-600">请先登录 tip.mesoor.com</div>
+                <div class="text-gray-600">${errorMessage}</div>
               </div>
             </div>
           `;

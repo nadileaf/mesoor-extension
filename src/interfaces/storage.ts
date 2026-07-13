@@ -31,6 +31,16 @@ export interface TipUser {
   token: string;
 }
 
+export interface FSGUser {
+  id: string;
+  phone: string;
+  username: string;
+  tenantAlias: string;
+  email?: string;
+  token: string;
+  createdAt: number;
+}
+
 export interface IActivities {
   [origin: string]: {
     active: boolean;
@@ -64,4 +74,5 @@ export type LocalStorage = {
   activities?: IActivities;
   loginState?: { [url: string]: number };
   socketidzyh?: string;
+  fsgUser?: FSGUser;
 };

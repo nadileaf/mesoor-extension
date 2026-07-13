@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 import {
   AlertDialog,
@@ -14,6 +15,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+import {
+  createUserWithToken,
+  parseFSGToken,
+  formatPhoneNumber,
+  generateIdFromString,
+} from '@/utils/fsg-user-utils';
+import { FSGUser } from '@/interfaces/storage';
+
 // 引入browser polyfill支持
 declare global {
   interface Window {
@@ -25,6 +34,12 @@ interface SettingsState {
   autoSync: boolean;
   enableSocketConnection: boolean;
   autoLinkedInEmail: boolean;
+}
+
+interface UserCreateState {
+  phone: string;
+  username: string;
+  email: string;
 }
 
 interface VersionInfo {
@@ -91,6 +106,14 @@ function compareVersions(
 }
 
 const SettingsContainer: React.FC = () => {
+  const authMode = import.meta.env.VITE_AUTH_MODE;
+  const tenantAlias = import.meta.env.VITE_TENANT_ALIAS;
+  const userApiBase = import.meta.env.VITE_USER_API_BASE;
+
+  console.log('authMode:', authMode);
+  console.log('tenantAlias:', tenantAlias);
+  console.log('userApiBase:', userApiBase);
+
   const [settings, setSettings] = useState<SettingsState>({
     autoSync: false,
     enableSocketConnection: true,
@@ -107,6 +130,16 @@ const SettingsContainer: React.FC = () => {
     currentVersion: string;
     latestVersion: string;
   } | null>(null);
+
+  // 用户创建相关状态
+  const [userCreateForm, setUserCreateForm] = useState<UserCreateState>({
+    phone: '',
+    username: '',
+    email: '',
+  });
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [currentUser, setCurrentUser] = useState<FSGUser | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // 获取插件版本信息
   const getManifestVersion = () => {
@@ -136,6 +169,16 @@ const SettingsContainer: React.FC = () => {
             autoLinkedInEmail: !result.linkedInEmailWait?.isEmailWait,
           });
         }
+
+        // 如果是 storage_token 模式，加载已创建的用户
+        if (authMode === 'storage_token') {
+          const fsgUserData = await (
+            window as any
+          ).browser?.storage?.local?.get('fsgUser');
+          if (fsgUserData?.fsgUser) {
+            setCurrentUser(fsgUserData.fsgUser);
+          }
+        }
       } catch (error) {
         console.error('Failed to load settings:', error);
       } finally {
@@ -144,7 +187,98 @@ const SettingsContainer: React.FC = () => {
     };
 
     loadSettings();
-  }, []);
+  }, [authMode]);
+
+  // 创建用户
+  const handleCreateUser = async () => {
+    console.log('开始创建用户');
+    console.log('tenantAlias:', tenantAlias);
+    console.log('userApiBase:', userApiBase);
+
+    if (!tenantAlias || !userApiBase) {
+      console.error('租户配置缺失');
+      setCreateError('租户配置缺失');
+      return;
+    }
+
+    // 验证表单
+    if (!userCreateForm.phone || !userCreateForm.username) {
+      console.error('手机号和用户名为必填项');
+      setCreateError('手机号和用户名为必填项');
+      return;
+    }
+
+    // 验证手机号格式
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!phoneRegex.test(userCreateForm.phone)) {
+      console.error('手机号格式错误:', userCreateForm.phone);
+      setCreateError('请输入正确的手机号格式');
+      return;
+    }
+
+    setIsCreatingUser(true);
+    setCreateError(null);
+
+    try {
+      const formattedPhone = formatPhoneNumber(userCreateForm.phone);
+      const userId = generateIdFromString(formattedPhone);
+
+      console.log('准备调用API，参数:', {
+        id: userId,
+        phone: formattedPhone,
+        username: userCreateForm.username,
+        tenantAlias,
+        email: userCreateForm.email || undefined,
+      });
+
+      const token = await createUserWithToken(
+        {
+          id: userId,
+          phone: formattedPhone,
+          username: userCreateForm.username,
+          tenantAlias,
+          email: userCreateForm.email || undefined,
+        },
+        userApiBase
+      );
+
+      console.log('API调用成功，获得token');
+
+      const fsgUser = parseFSGToken(
+        token,
+        formattedPhone,
+        userCreateForm.username,
+        tenantAlias,
+        userCreateForm.email || undefined
+      );
+
+      console.log('保存用户到storage:', fsgUser);
+
+      // 保存到 storage
+      await (window as any).browser?.storage?.local?.set({
+        fsgUser,
+      });
+
+      setCurrentUser(fsgUser);
+      setUserCreateForm({ phone: '', username: '', email: '' });
+      console.log('用户创建成功');
+    } catch (error) {
+      console.error('创建用户失败，详细错误:', error);
+      setCreateError(`创建用户失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  // 删除用户
+  const handleDeleteUser = async () => {
+    try {
+      await (window as any).browser?.storage?.local?.remove('fsgUser');
+      setCurrentUser(null);
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+    }
+  };
 
   // 保存设置
   const saveSettings = async (newSettings: SettingsState) => {
@@ -295,6 +429,128 @@ const SettingsContainer: React.FC = () => {
 
       {/* 设置内容 */}
       <div className="p-6 space-y-6">
+        {/* 用户创建设置（仅在 storage_token 模式显示） */}
+        {authMode === 'storage_token' && (
+          <Card className="gap-4">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <span className="mr-2">👤</span>
+                用户创建
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {currentUser ? (
+                <div className="space-y-3">
+                  <div className="bg-muted p-4 rounded-md space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        手机号
+                      </span>
+                      <span className="text-sm font-medium">
+                        {currentUser.phone}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        用户名
+                      </span>
+                      <span className="text-sm font-medium">
+                        {currentUser.username}
+                      </span>
+                    </div>
+                    {currentUser.email && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          邮箱
+                        </span>
+                        <span className="text-sm font-medium">
+                          {currentUser.email}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        创建时间
+                      </span>
+                      <span className="text-sm font-medium">
+                        {new Date(currentUser.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleDeleteUser}
+                    className="w-full"
+                  >
+                    删除用户
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">
+                      手机号 *
+                    </label>
+                    <Input
+                      type="tel"
+                      placeholder="请输入手机号"
+                      value={userCreateForm.phone}
+                      onChange={e =>
+                        setUserCreateForm({
+                          ...userCreateForm,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">
+                      用户名 *
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="请输入用户名"
+                      value={userCreateForm.username}
+                      onChange={e =>
+                        setUserCreateForm({
+                          ...userCreateForm,
+                          username: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">
+                      邮箱（可选）
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="请输入邮箱"
+                      value={userCreateForm.email}
+                      onChange={e =>
+                        setUserCreateForm({
+                          ...userCreateForm,
+                          email: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  {createError && (
+                    <div className="text-sm text-red-600">{createError}</div>
+                  )}
+                  <Button
+                    onClick={handleCreateUser}
+                    disabled={isCreatingUser}
+                    className="w-full"
+                  >
+                    {isCreatingUser ? '创建中...' : '创建用户'}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* 简历同步设置 */}
         <Card className="gap-4">
           <CardHeader>
