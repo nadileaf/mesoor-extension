@@ -21,6 +21,7 @@ import {
   formatPhoneNumber,
   generateIdFromString,
 } from '@/utils/fsg-user-utils';
+import { writeTokenCookie, removeTokenCookie } from '@/utils/user-utils';
 import { FSGUser } from '@/interfaces/storage';
 
 // 引入browser polyfill支持
@@ -105,7 +106,9 @@ function compareVersions(
   }
 }
 
-const SettingsContainer: React.FC = () => {
+const SettingsContainer: React.FC<{ onNavigateToSourcing?: () => void }> = ({
+  onNavigateToSourcing,
+}) => {
   const authMode = import.meta.env.VITE_AUTH_MODE;
   const tenantAlias = import.meta.env.VITE_TENANT_ALIAS;
   const userApiBase = import.meta.env.VITE_USER_API_BASE;
@@ -259,6 +262,10 @@ const SettingsContainer: React.FC = () => {
         fsgUser,
       });
 
+      if (import.meta.env.VITE_WRITE_TOKEN_TO_COOKIE === 'true') {
+        await writeTokenCookie(token, (window as any).browser, import.meta.env.VITE_TOKEN_COOKIE_DOMAIN!);
+      }
+
       setCurrentUser(fsgUser);
       setUserCreateForm({ phone: '', username: '', email: '' });
       console.log('用户创建成功');
@@ -274,6 +281,9 @@ const SettingsContainer: React.FC = () => {
   const handleDeleteUser = async () => {
     try {
       await (window as any).browser?.storage?.local?.remove('fsgUser');
+      if (import.meta.env.VITE_WRITE_TOKEN_TO_COOKIE === 'true') {
+        await removeTokenCookie((window as any).browser);
+      }
       setCurrentUser(null);
     } catch (error) {
       console.error('Failed to delete user:', error);
@@ -482,8 +492,17 @@ const SettingsContainer: React.FC = () => {
                     onClick={handleDeleteUser}
                     className="w-full"
                   >
-                    删除用户
+                    退出登录
                   </Button>
+                  {onNavigateToSourcing && (
+                    <Button
+                      variant="default"
+                      onClick={onNavigateToSourcing}
+                      className="w-full"
+                    >
+                      返回AI Sourcing
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">

@@ -35,6 +35,13 @@ interface ImportMetaEnv {
    * - 'sub': JWT sub字段变化时重连（适合token频繁刷新的环境如inzight）
    */
   readonly VITE_WS_IDENTITY_KEY?: 'token' | 'sub';
+  /** 是否将登录 token 写入浏览器 cookie（域名 .mesoor.com），让主站页面免登录 */
+  readonly VITE_USER_API_BASE?: string;
+  readonly VITE_TENANT_ALIAS?: string;
+  readonly VITE_AUTH_MODE?: string;
+  readonly VITE_WRITE_TOKEN_TO_COOKIE?: string;
+  /** cookie domain，例如 .mesoor.com */
+  readonly VITE_TOKEN_COOKIE_DOMAIN?: string;
 }
 
 interface ImportMeta {

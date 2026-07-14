@@ -24,7 +24,13 @@ function App() {
             onNavigateToSettings={() => setActiveTab('settings')}
           />
         ) : (
-          <SettingsContainer />
+          <SettingsContainer
+            onNavigateToSourcing={
+              enableSourcingChat
+                ? () => setActiveTab('Sourcing')
+                : undefined
+            }
+          />
         )}
       </div>
     </Layout>

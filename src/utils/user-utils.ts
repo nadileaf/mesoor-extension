@@ -38,3 +38,79 @@ export const getDomain = (url: string): string => {
   domainArray.reverse();
   return `.${domainArray.join('.')}`;
 };
+
+interface CookieSetDetails {
+  url: string;
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  secure?: boolean;
+  sameSite?: 'strict' | 'lax' | 'no_restriction';
+  expirationDate?: number;
+}
+
+interface CookieRemoveDetails {
+  url: string;
+  name: string;
+}
+
+interface BrowserCookieAPI {
+  cookies: {
+    set(details: CookieSetDetails): Promise<unknown>;
+    remove(details: CookieRemoveDetails): Promise<unknown>;
+  };
+}
+
+const TOKEN_COOKIE_NAME = 'token';
+
+export async function writeTokenCookie(
+  token: string,
+  browserLike: BrowserCookieAPI,
+  cookieDomain: string,
+  tokenHost?: string
+): Promise<void> {
+  if (!browserLike?.cookies?.set) {
+    console.warn('[writeTokenCookie] cookies API 不可用，跳过写入');
+    return;
+  }
+
+  const host = tokenHost || import.meta.env.VITE_TOKEN_HOST;
+  const { exp } = parseJwt(token);
+
+  try {
+    await browserLike.cookies.set({
+      url: host + '/',
+      name: TOKEN_COOKIE_NAME,
+      value: token,
+      domain: cookieDomain,
+      path: '/',
+      secure: true,
+      sameSite: 'lax',
+      expirationDate: exp,
+    });
+  } catch (error) {
+    console.error('[writeTokenCookie] 写入失败:', error);
+  }
+}
+
+export async function removeTokenCookie(
+  browserLike: BrowserCookieAPI,
+  tokenHost?: string
+): Promise<void> {
+  if (!browserLike?.cookies?.remove) {
+    console.warn('[removeTokenCookie] cookies API 不可用，跳过移除');
+    return;
+  }
+
+  const host = tokenHost || import.meta.env.VITE_TOKEN_HOST;
+
+  try {
+    await browserLike.cookies.remove({
+      url: host + '/',
+      name: TOKEN_COOKIE_NAME,
+    });
+  } catch (error) {
+    console.error('[removeTokenCookie] 移除失败:', error);
+  }
+}

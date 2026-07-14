@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { writeTokenCookie } from '@/utils/user-utils';
 
 // 引入browser polyfill
 declare global {
@@ -155,6 +156,13 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           const fsgUser = await browserAPI?.storage?.local?.get('fsgUser');
           _token = fsgUser?.fsgUser?.token;
           console.log('[storage_token mode] token from storage:', _token);
+
+          if (
+            _token &&
+            import.meta.env.VITE_WRITE_TOKEN_TO_COOKIE === 'true'
+          ) {
+            await writeTokenCookie(_token, browserAPI, import.meta.env.VITE_TOKEN_COOKIE_DOMAIN!);
+          }
         } else {
           // 从 cookie 读取 token（原有逻辑）
           const token = await browserAPI?.cookies?.get({
