@@ -42,6 +42,7 @@ import { findValueByKey } from './utils/json-utils.ts';
 import * as RequestListen from './utils/request-listen.ts';
 import { request } from './utils/request.ts';
 import { installDeclarativeNet } from './utils/with-credentials.ts';
+import { maimaiTokenManager, parseMaimaiToken } from './utils/maimai-token.ts';
 import {
   isConfirmSynchronizationMessage,
   isSyncHtmlMessage,
@@ -509,6 +510,11 @@ const maimaiResume$ = RequestListen.install([
 //   '*://easy.lagou.com/search/resume/fetchResume.json*',
 // ]);
 installDeclarativeNet(apiConfig);
+
+// 初始化脉脉 token manager（从 storage 恢复 key / fingerprint）
+maimaiTokenManager.initialize().catch(e =>
+  console.warn('[MaimaiToken] 初始化失败, 将在首次请求时注册:', e)
+);
 
 async function getTokenFromTip() {
   if (extensionDefaultToken) {
@@ -2329,6 +2335,39 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ message: 'pingMesoorExtensionSuccess' });
   }
 
+  // 脉脉: 接收 content script 发来的浏览器指纹
+  if (request.type === 'maimai-fingerprint') {
+    maimaiTokenManager.setFingerprint(request.fingerprint).then(() => {
+      if (request.mainScriptHash) {
+        maimaiTokenManager.setMainScriptHash(request.mainScriptHash);
+      }
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  // 脉脉: 接收从页面内存劫持的 kid
+  if (request.type === 'maimai-key-captured') {
+    maimaiTokenManager.setKid(request.kid).then(() => {
+      console.log('[MaimaiToken] kid 已从页面内存获取');
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  // 脉脉: MAIN world 从页面 fetch 中捕获到 fp/kid
+  if (request.type === 'maimai-page-token') {
+    maimaiTokenManager.setPageTokenInfo(request.fp, request.kid);
+    console.log('[MaimaiToken] 从页面 fetch 捕获 fp/kid:', request.fp, request.kid);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 脉脉: fetch proxy 响应 (由 proxyFetchViaPage 内部的 listener 处理)
+  if (request.type === 'maimai-proxy-fetch-response') {
+    return;
+  }
+
   if (request.type === 'sync-resume-feedback') {
     console.log('[sync-resume-feedback] 收到简历同步反馈消息');
     sendResponse({ success: true });
@@ -2944,6 +2983,52 @@ cacheHeaders$
       headers: details.requestHeaders,
     });
   });
+/**
+ * 在 page context 里执行 fetch（解决 maimai sec-fetch-site 检测）
+ * 返回 RequestResponse 兼容对象: { ok, status, statusText, headers, json(), text() }
+ */
+async function proxyFetchViaPage(url, options = {}, tabId) {
+  return new Promise((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+    const timeout = setTimeout(() => {
+      browser.runtime.onMessage.removeListener(listener);
+      reject(new Error('Proxy fetch timeout'));
+    }, 30000);
+
+    const listener = (msg) => {
+      if (msg.type === 'maimai-proxy-fetch-response' && msg.requestId === requestId) {
+        clearTimeout(timeout);
+        browser.runtime.onMessage.removeListener(listener);
+        if (msg.error) {
+          reject(new Error(msg.error));
+        } else {
+          resolve({
+            ok: msg.ok,
+            status: msg.status,
+            statusText: msg.statusText,
+            headers: msg.headers,
+            json: async () => JSON.parse(msg.body),
+            text: async () => msg.body,
+          });
+        }
+      }
+    };
+    browser.runtime.onMessage.addListener(listener);
+
+    chrome.tabs.sendMessage(tabId, {
+      type: 'maimai-proxy-fetch',
+      requestId,
+      url,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      body: options.body,
+    }).catch((err) => {
+      clearTimeout(timeout);
+      browser.runtime.onMessage.removeListener(listener);
+      reject(err);
+    });
+  });
+}
 // 这个是重放器，配置的URL会执行重放
 const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   needCacheHeadersUrl
@@ -3005,6 +3090,42 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         headers[headerName] = originalHeaders[key].value;
       }
     }
+    // 脉脉: 用新鲜 ECDSA token 替换缓存中已过期的 header
+    // 跳过 register_pubkey，因为 kid 需要从这个请求的响应中提取
+    if (details.url.includes('maimai.cn') && !details.url.includes('register_pubkey')) {
+      console.log('[MaimaiToken] 🔍 拦截到请求:', details.url);
+      try {
+        // 从页面原始 x-ent-token 中解析 fp/kid（和油猴一致，复用页面的指纹和密钥 ID）
+        const originalTokenHeader = details.requestHeaders?.find(
+          h => h.name.toLowerCase() === 'x-ent-token'
+        );
+        if (originalTokenHeader?.value) {
+          const parsed = parseMaimaiToken(originalTokenHeader.value);
+          console.log('[MaimaiToken] 📋 页面token解析结果:', parsed);
+          if (parsed) {
+            maimaiTokenManager.setPageTokenInfo(parsed.fp, parsed.kid);
+          }
+        } else {
+          console.log('[MaimaiToken] ⚠️ 请求中无 x-ent-token header');
+        }
+        // kid 未就绪时跳过，等 MAIN world 捕获到 kid 后再拦截后续请求
+        if (maimaiTokenManager.hasKid()) {
+          const maimaiHeaders = await maimaiTokenManager.getHeaders(details.tabId);
+          headers['x-ent-rid'] = maimaiHeaders['x-ent-rid'];
+          headers['x-ent-fp'] = maimaiHeaders['x-ent-fp'];
+          headers['x-ent-token'] = maimaiHeaders['x-ent-token'];
+          console.log('[MaimaiToken] 新鲜 token 计算结果:');
+          console.log('  x-ent-rid:', maimaiHeaders['x-ent-rid']);
+          console.log('  x-ent-fp:', maimaiHeaders['x-ent-fp']);
+          console.log('  x-ent-token:', maimaiHeaders['x-ent-token']);
+        } else {
+          console.log('[MaimaiToken] ⏭️ kid 未就绪，跳过注入 (等 MAIN world 捕获)');
+        }
+      } catch (e) {
+        console.error('[MaimaiToken] 获取token失败:', e);
+      }
+    }
+
     const contentType = headers['Content-Type'] || '';
     let requestBody;
     if (contentType.includes('application/x-www-form-urlencoded')) {
@@ -3069,7 +3190,39 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         '/wapi/zpjob/view/geek/info'
       );
     }
-    const _replayResponse = await request(replayUrl, opt);
+    let _replayResponse;
+    try {
+      _replayResponse = replayUrl.includes('maimai.cn')
+        ? await proxyFetchViaPage(replayUrl, opt, details.tabId)
+        : await request(replayUrl, opt);
+    } catch (error) {
+      // 脉脉 401/403: 重新注册公钥并重试一次
+      if (
+        replayUrl.includes('maimai.cn') &&
+        error?.response?.status &&
+        [401, 403].includes(error.response.status)
+      ) {
+        console.warn('[MaimaiToken] 重放收到', error.response.status, ', 重新注册并重试...');
+        await maimaiTokenManager.reRegister();
+        const freshHeaders = await maimaiTokenManager.getHeaders(details.tabId);
+        opt.headers['x-ent-rid'] = freshHeaders['x-ent-rid'];
+        opt.headers['x-ent-fp'] = freshHeaders['x-ent-fp'];
+        opt.headers['x-ent-token'] = freshHeaders['x-ent-token'];
+        console.log('[MaimaiToken] 重试新鲜 token 计算结果:');
+        console.log('  x-ent-rid:', freshHeaders['x-ent-rid']);
+        console.log('  x-ent-fp:', freshHeaders['x-ent-fp']);
+        console.log('  x-ent-token:', freshHeaders['x-ent-token']);
+        _replayResponse = replayUrl.includes('maimai.cn')
+          ? await proxyFetchViaPage(replayUrl, opt, details.tabId)
+          : await request(replayUrl, opt);
+      } else if (replayUrl.includes('maimai.cn') && !error?.response?.status) {
+        // proxy fetch 错误 (超时/无tab): 降级为直接请求
+        console.warn('[MaimaiToken] proxy fetch 失败, 降级为直接请求:', error.message);
+        _replayResponse = await request(replayUrl, opt);
+      } else {
+        throw error;
+      }
+    }
     const replayResponse = await _replayResponse.json();
     requestsHeaderMap.delete(details.requestId);
     return {
@@ -3085,8 +3238,20 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   // tap(({ details }) => {
   //   console.log('重放器执行重放完成', details.url);
   // }),
-  catchError(error => {
+  catchError(async error => {
     console.error('resumeSendHeadersV2Base错误:', error);
+    // 脉脉 401/403: 尝试重新注册公钥
+    if (error?.response?.status && [401, 403].includes(error.response.status)) {
+      const url = error.config?.url || '';
+      if (url.includes('maimai.cn')) {
+        console.warn('[MaimaiToken] 收到', error.response.status, ', 尝试重新注册...');
+        try {
+          await maimaiTokenManager.reRegister();
+        } catch (regErr) {
+          console.error('[MaimaiToken] 重新注册失败:', regErr);
+        }
+      }
+    }
     return of();
   }),
   retry(),

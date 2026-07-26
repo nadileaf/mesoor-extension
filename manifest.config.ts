@@ -43,6 +43,12 @@ export default defineManifest({
   },
   content_scripts: [
     {
+      js: ['src/content/maimai-inject.ts'],
+      matches: ['*://maimai.cn/*'],
+      run_at: 'document_start',
+      world: 'MAIN',
+    },
+    {
       js: ['src/content/main.tsx'],
       matches: [
         '*://*.lagou.com/*',
