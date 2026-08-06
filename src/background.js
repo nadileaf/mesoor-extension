@@ -2990,6 +2990,8 @@ cacheHeaders$
 async function proxyFetchViaPage(url, options = {}, tabId) {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
+    // 标记 proxy 请求，避免在 webRequest 中被重复拦截
+    const headers = { ...(options.headers || {}), 'X-Mesoor-Proxy': '1' };
     const timeout = setTimeout(() => {
       browser.runtime.onMessage.removeListener(listener);
       reject(new Error('Proxy fetch timeout'));
@@ -3020,7 +3022,7 @@ async function proxyFetchViaPage(url, options = {}, tabId) {
       requestId,
       url,
       method: options.method || 'GET',
-      headers: options.headers || {},
+      headers: headers,
       body: options.body,
     }).catch((err) => {
       clearTimeout(timeout);
@@ -3076,6 +3078,14 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     await delay(1000);
     const originalHeaders =
       requestsHeaderMap.get(details.requestId)?.headers ?? {};
+    // 跳过 proxyFetchViaPage 生成的请求，避免回环
+    const isProxy = Object.values(originalHeaders).some(
+      (h) => h.name?.toLowerCase() === 'x-mesoor-proxy'
+    );
+    if (isProxy) {
+      requestsHeaderMap.delete(details.requestId);
+      return EMPTY;
+    }
     if (!originalHeaders) {
       console.log('step 2 cacheHeaders cant find headers', originalHeaders);
     }

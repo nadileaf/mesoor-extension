@@ -29,15 +29,17 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       crx({ manifest }),
       // 修复 MAIN world 脚本的 loader: chrome.runtime.getURL 在 MAIN world 不可用
-      // closeBundle 在所有文件写入后触发，直接改 manifest.json 指向内联脚本
+      // closeBundle 覆盖生产构建，configureServer 覆盖开发模式
       {
         name: 'fix-main-world-loader',
-        closeBundle() {
+      } as any,
+      (() => {
+        const applyFix = () => {
           const distDir = path.resolve(__dirname, 'dist');
           const manifestPath = path.join(distDir, 'manifest.json');
           if (!fs.existsSync(manifestPath)) return;
-          
-          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          const raw = fs.readFileSync(manifestPath, 'utf-8');
+          const manifest = JSON.parse(raw);
           let changed = false;
           for (const cs of manifest.content_scripts || []) {
             if (cs.world === 'MAIN') {
@@ -46,11 +48,28 @@ export default defineConfig(({ mode }) => {
             }
           }
           if (changed) {
-            fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-            console.log('[fix-main-world-loader] ✅ manifest.json 已修复 MAIN world 引用');
+            const newRaw = JSON.stringify(manifest, null, 2);
+            if (newRaw !== raw) {
+              fs.writeFileSync(manifestPath, newRaw);
+              console.log('[fix-main-world-loader] ✅ manifest.json 已修复 MAIN world 引用');
+            }
           }
-        },
-      },
+        };
+        return {
+          name: 'fix-main-world-loader',
+          closeBundle: applyFix,
+          configureServer(server: any) {
+            setTimeout(applyFix, 2000);
+            const distDir = path.resolve(__dirname, 'dist');
+            if (fs.existsSync(distDir)) {
+              const watcher = fs.watch(distDir, { recursive: true }, (_event, filename) => {
+                if (filename === 'manifest.json') setTimeout(applyFix, 300);
+              });
+              server.httpServer?.once('close', () => watcher.close());
+            }
+          },
+        };
+      })(),
       zip({
         outDir: 'release',
         outFileName: `crx-${env.VITE_EXTENSION_SLUG || name}-${mode}-v${version}.zip`,
