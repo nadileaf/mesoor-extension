@@ -3429,32 +3429,33 @@ const liePinChengLieTongPageResume$ = resumeSendHeadersV2Base$.pipe(
     )
   ),
   mergeMap(async ({ details, replayResponse, headers }) => {
-    const cnResIdEncode = replayResponse.data.cnResIdEncode;
-    const workExpsResponse = await request(
-      'https://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-work-exps',
-      {
-        method: 'POST',
-        headers: headers,
-        body: `resIdEncode=${cnResIdEncode}`,
-      }
-    );
-    replayResponse.mesoorExtra = await workExpsResponse.json();
-    const body = {
-      jsonBody: replayResponse,
-      url: details.url,
-      fileContentB64: [],
-    };
-    console.log('猎聘诚猎通-非沟通需要把工作经历的请求拼出来', cnResIdEncode);
-    return { details, body, headers };
-  }),
-  catchError(error => {
-    const body = {
-      jsonBody: replayResponse,
-      url: details.url,
-      fileContentB64: [],
-    };
-    console.error('猎聘诚猎通-非沟通需要把工作经历的请求拼出来错误:', error);
-    return { details, body, headers };
+    try {
+      const cnResIdEncode = replayResponse.data.cnResIdEncode;
+      const workExpsResponse = await request(
+        'https://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-work-exps',
+        {
+          method: 'POST',
+          headers: headers,
+          body: `resIdEncode=${cnResIdEncode}`,
+        }
+      );
+      replayResponse.mesoorExtra = await workExpsResponse.json();
+      const body = {
+        jsonBody: replayResponse,
+        url: details.url,
+        fileContentB64: [],
+      };
+      console.log('猎聘诚猎通-非沟通需要把工作经历的请求拼出来', cnResIdEncode);
+      return { details, body, headers };
+    } catch (error) {
+      console.error('猎聘诚猎通-非沟通需要把工作经历的请求拼出来错误:', error);
+      const body = {
+        jsonBody: replayResponse,
+        url: details.url,
+        fileContentB64: [],
+      };
+      return { details, body, headers };
+    }
   }),
   retry()
 );
@@ -3914,51 +3915,52 @@ const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
     return { details, replayResponse, headers };
   }),
   mergeMap(async ({ details, replayResponse, headers }) => {
-    const donwnloadAttachmentUrlPath =
-      replayResponse.data?.attachmentResume?.downloadUrl;
-    let fileContentB64 = null;
-    if (donwnloadAttachmentUrlPath) {
-      const donwnloadAttachmentUrl = `https://tdoss.liepin.com/o/${donwnloadAttachmentUrlPath}`;
-      const resultAttachmentData = await request(donwnloadAttachmentUrl, {
-        headers: {
-          ...headers,
-          'content-type': 'application/x-www-form-urlencoded',
-        },
-        method: 'GET',
-      });
-      const blob = await resultAttachmentData.blob();
-      const underFileContentB64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => {
-          resolve(reader.result.split(',')[1]);
+    try {
+      const donwnloadAttachmentUrlPath =
+        replayResponse.data?.attachmentResume?.downloadUrl;
+      let fileContentB64 = null;
+      if (donwnloadAttachmentUrlPath) {
+        const donwnloadAttachmentUrl = `https://tdoss.liepin.com/o/${donwnloadAttachmentUrlPath}`;
+        const resultAttachmentData = await request(donwnloadAttachmentUrl, {
+          headers: {
+            ...headers,
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          method: 'GET',
+        });
+        const blob = await resultAttachmentData.blob();
+        const underFileContentB64 = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => {
+            resolve(reader.result.split(',')[1]);
+          };
+        });
+        const responseHeaders = {};
+        resultAttachmentData.headers.forEach((value, name) => {
+          responseHeaders[name] = value;
+        });
+        fileContentB64 = {
+          fileContentB64: underFileContentB64,
+          responseHeaders: responseHeaders,
+          type: 'resumeAttachment',
         };
-      });
-      const responseHeaders = {};
-      resultAttachmentData.headers.forEach((value, name) => {
-        responseHeaders[name] = value;
-      });
-      fileContentB64 = {
-        fileContentB64: underFileContentB64,
-        responseHeaders: responseHeaders,
-        type: 'resumeAttachment',
+      }
+      const body = {
+        jsonBody: replayResponse,
+        url: details.url,
+        fileContentB64: donwnloadAttachmentUrlPath ? [fileContentB64] : [],
       };
+      return { details, headers, body };
+    } catch (error) {
+      console.error('猎聘企业版错误:', error);
+      const body = {
+        jsonBody: replayResponse,
+        url: details.url,
+        fileContentB64: [],
+      };
+      return { details, headers, body };
     }
-    const body = {
-      jsonBody: replayResponse,
-      url: details.url,
-      fileContentB64: donwnloadAttachmentUrlPath ? [fileContentB64] : [],
-    };
-    return { details, headers, body };
-  }),
-  catchError(error => {
-    console.error('猎聘企业版错误:', error);
-    const body = {
-      jsonBody: replayResponse,
-      url: details.url,
-      fileContentB64: [],
-    };
-    return of({ details, headers, body });
   }),
   retry()
 );
