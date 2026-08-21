@@ -88,6 +88,9 @@ const syncEntityResultCheckUrl =
   spaceServer + `/v2/entities/{0}/{1}?_proxy=true`;
 
 let requestsHeaderMap = new Map();
+// tabId|url|method → timestamp，追踪正在进行的代理重放，防止回环
+const pendingProxyReplays = new Map();
+const PENDING_PROXY_TTL_MS = 5000;
 let ws = null;
 let wait = null;
 const tabsObject = {};
@@ -111,6 +114,12 @@ browser.tabs.onRemoved.addListener(tabId => {
     browser.webRequest.onCompleted.removeListener(monitor.listener);
     clearTimeout(monitor.timer);
     networkMonitors.delete(tabId);
+  }
+  // 清理该 tabId 的 pending 重放记录
+  for (const [key] of pendingProxyReplays.entries()) {
+    if (key.startsWith(`${tabId}|`)) {
+      pendingProxyReplays.delete(key);
+    }
   }
 });
 /**
@@ -2990,10 +2999,14 @@ cacheHeaders$
 async function proxyFetchViaPage(url, options = {}, tabId) {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomUUID();
-    // 标记 proxy 请求，避免在 webRequest 中被重复拦截
-    const headers = { ...(options.headers || {}), 'X-Mesoor-Proxy': '1' };
+    const headers = { ...(options.headers || {}) };
+    // 记录 pending 重放：用 tabId+url+method 作为 key，防止回环
+    const method = (options.method || 'GET').toUpperCase();
+    const pendingKey = `${tabId}|${url}|${method}`;
+    pendingProxyReplays.set(pendingKey, Date.now());
     const timeout = setTimeout(() => {
       browser.runtime.onMessage.removeListener(listener);
+      pendingProxyReplays.delete(pendingKey);
       reject(new Error('Proxy fetch timeout'));
     }, 30000);
 
@@ -3001,6 +3014,7 @@ async function proxyFetchViaPage(url, options = {}, tabId) {
       if (msg.type === 'maimai-proxy-fetch-response' && msg.requestId === requestId) {
         clearTimeout(timeout);
         browser.runtime.onMessage.removeListener(listener);
+        pendingProxyReplays.delete(pendingKey);
         if (msg.error) {
           reject(new Error(msg.error));
         } else {
@@ -3027,6 +3041,7 @@ async function proxyFetchViaPage(url, options = {}, tabId) {
     }).catch((err) => {
       clearTimeout(timeout);
       browser.runtime.onMessage.removeListener(listener);
+      pendingProxyReplays.delete(pendingKey);
       reject(err);
     });
   });
@@ -3040,6 +3055,15 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   filter(() => {
     if (disableResumeSync) {
       console.log('[resumeSendHeadersV2Base] 环境变量已禁用简历收录，跳过重放');
+      return false;
+    }
+    return true;
+  }),
+  // 用 tabId+url+method 检测回环，在 filter 层直接拦截
+  filter(details => {
+    const pendingKey = `${details.tabId}|${details.url}|${(details.method || 'GET').toUpperCase()}`;
+    if (pendingProxyReplays.has(pendingKey)) {
+      pendingProxyReplays.delete(pendingKey);
       return false;
     }
     return true;
@@ -3078,14 +3102,6 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     await delay(1000);
     const originalHeaders =
       requestsHeaderMap.get(details.requestId)?.headers ?? {};
-    // 跳过 proxyFetchViaPage 生成的请求，避免回环
-    const isProxy = Object.values(originalHeaders).some(
-      (h) => h.name?.toLowerCase() === 'x-mesoor-proxy'
-    );
-    if (isProxy) {
-      requestsHeaderMap.delete(details.requestId);
-      return EMPTY;
-    }
     if (!originalHeaders) {
       console.log('step 2 cacheHeaders cant find headers', originalHeaders);
     }
