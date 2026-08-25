@@ -3154,21 +3154,58 @@ const normalizeLiepinAttachmentUrl = attachmentPath => {
 const findLiepinAttachmentParams = value => {
   const parsedValue = parseLiepinAttachmentValue(value);
   if (!parsedValue || typeof parsedValue !== 'object') {
-    return null;
+    return [];
   }
+  const results = [];
   if (parsedValue.attachmentResume?.param) {
     const param = parseLiepinAttachmentValue(parsedValue.attachmentResume.param);
-    if (param?.encodeAttachmentId && (param.encodeUsercId || param.userId)) {
-      return {
+    const userId = param?.encodeUsercId || param?.userId;
+    if (param?.encodeAttachmentId && userId) {
+      results.push({
         snapshotId: param.encodeAttachmentId,
-        userId: param.encodeUsercId || param.userId,
-      };
+        userId,
+        resumeId: param.resId || null,
+      });
     }
   }
   for (const childValue of Object.values(parsedValue)) {
-    const result = findLiepinAttachmentParams(childValue);
-    if (result) {
-      return result;
+    results.push(...findLiepinAttachmentParams(childValue));
+  }
+  return results;
+};
+
+const bindLiepinResumeAlias = (tabId, resumeId, params) => {
+  if (!resumeId || !params) {
+    return;
+  }
+  liepinAttachmentParamsByTab.set(`${tabId}:${resumeId}`, {
+    params: { ...params, resumeId },
+    cachedAt: Date.now(),
+  });
+  pruneLiepinTabAttachmentParams(tabId);
+};
+
+const findLiepinCachedAttachmentParams = (tabId, value) => {
+  const resumeIds = [];
+  const collectResumeIds = candidate => {
+    const parsedCandidate = parseLiepinAttachmentValue(candidate);
+    if (!parsedCandidate || typeof parsedCandidate !== 'object') {
+      return;
+    }
+    if (typeof parsedCandidate.resId === 'string') {
+      resumeIds.push(parsedCandidate.resId);
+    }
+    for (const childValue of Object.values(parsedCandidate)) {
+      collectResumeIds(childValue);
+    }
+  };
+  collectResumeIds(value);
+
+  // 只使用简历详情响应中的稳定 resId 关联附件参数。
+  for (const resumeId of [...new Set(resumeIds)]) {
+    const params = getLiepinAttachmentParams(tabId, resumeId);
+    if (params) {
+      return params;
     }
   }
   return null;
@@ -3186,23 +3223,6 @@ const liepinAttachmentToBase64 = async (url, headers) => {
     reader.readAsDataURL(blob);
   });
   return { fileContentB64, responseHeaders: Object.fromEntries(response.headers.entries()) };
-};
-
-const findLiepinValueByKey = (value, key) => {
-  const parsedValue = parseLiepinAttachmentValue(value);
-  if (!parsedValue || typeof parsedValue !== 'object') {
-    return null;
-  }
-  if (parsedValue[key]) {
-    return parsedValue[key];
-  }
-  for (const childValue of Object.values(parsedValue)) {
-    const result = findLiepinValueByKey(childValue, key);
-    if (result) {
-      return result;
-    }
-  }
-  return null;
 };
 
 const fetchLiepinAttachment = async (params, headers) => {
@@ -3224,11 +3244,11 @@ const fetchLiepinAttachment = async (params, headers) => {
   return liepinAttachmentToBase64(normalizeLiepinAttachmentUrl(path), headers);
 };
 
-const getLiepinAttachmentParams = (tabId, userId) => {
-  if (!userId) {
+const getLiepinAttachmentParams = (tabId, resumeId) => {
+  if (!resumeId) {
     return null;
   }
-  const key = `${tabId}:${userId}`;
+  const key = `${tabId}:${resumeId}`;
   const cached = liepinAttachmentParamsByTab.get(key);
   if (cached && Date.now() - cached.cachedAt < LIEPIN_ATTACHMENT_PARAM_TTL) {
     return cached.params;
@@ -4022,11 +4042,21 @@ const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
 const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list')),
   mergeMap(async ({ details, replayResponse, headers }) => {
-    const params = findLiepinAttachmentParams(replayResponse);
-    if (params) {
+    const paramsList = findLiepinAttachmentParams(replayResponse);
+    const cacheableParams = paramsList.filter(params => params.resumeId);
+    for (const params of cacheableParams) {
       const cachedParams = { params, cachedAt: Date.now() };
-      liepinAttachmentParamsByTab.set(`${details.tabId}:${params.userId}`, cachedParams);
+      liepinAttachmentParamsByTab.set(
+        `${details.tabId}:${params.resumeId}`,
+        cachedParams
+      );
+    }
+    if (cacheableParams.length > 0) {
       pruneLiepinTabAttachmentParams(details.tabId);
+      console.log(
+        '[LiepinAttachment] 已缓存附件参数:',
+        paramsList.map(params => params.userId)
+      );
     }
     return null;
   }),
@@ -4046,11 +4076,35 @@ const liepinChatResume$ = resumeSendHeadersV2Base$.pipe(
   ),
   mergeMap(async ({ details, replayResponse, headers }) => {
     try {
-      const candidateUserId = findLiepinValueByKey(replayResponse, 'userId');
-      const params = getLiepinAttachmentParams(details.tabId, candidateUserId);
+      const params = findLiepinCachedAttachmentParams(
+        details.tabId,
+        replayResponse
+      );
+      const resumeIds = [];
+      const collectResumeIds = value => {
+        const parsed = parseLiepinAttachmentValue(value);
+        if (!parsed || typeof parsed !== 'object') {
+          return;
+        }
+        if (typeof parsed.resId === 'string') {
+          resumeIds.push(parsed.resId);
+        }
+        for (const child of Object.values(parsed)) {
+          collectResumeIds(child);
+        }
+      };
+      collectResumeIds(replayResponse);
       let fileContentB64 = [];
       if (params) {
+        for (const resumeId of [...new Set(resumeIds)]) {
+          bindLiepinResumeAlias(details.tabId, resumeId, params);
+        }
         try {
+          console.log(
+            '[LiepinAttachment] 详情命中附件参数:',
+            params.userId,
+            params.snapshotId
+          );
           const attachment = await fetchLiepinAttachment(params, headers);
           fileContentB64.push({ ...attachment, type: 'resumeAttachment' });
         } catch (error) {
