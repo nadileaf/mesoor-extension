@@ -3159,12 +3159,18 @@ const findLiepinAttachmentParams = value => {
   const results = [];
   if (parsedValue.attachmentResume?.param) {
     const param = parseLiepinAttachmentValue(parsedValue.attachmentResume.param);
+    const onlineResumeParam = parseLiepinAttachmentValue(
+      parsedValue.onlineResume?.param
+    );
     const userId = param?.encodeUsercId || param?.userId;
-    if (param?.encodeAttachmentId && userId) {
+    // 只认同一条聊天消息中的 onlineResume.param.encodeResId；
+    // 它与详情响应的 data.resId 相同，是附件与简历的唯一关联键。
+    const resumeId = onlineResumeParam?.encodeResId || null;
+    if (param?.encodeAttachmentId && userId && resumeId) {
       results.push({
         snapshotId: param.encodeAttachmentId,
         userId,
-        resumeId: param.resId || null,
+        resumeId,
       });
     }
   }
