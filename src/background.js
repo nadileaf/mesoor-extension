@@ -484,7 +484,6 @@ const needCacheHeadersUrlSubStream = [
   '*://hr-api-v2.shixiseng.com/api/v1/talent/view*',
   '*://cupid.51job.com/imchat/open/ehire/chat/resumeDetail*',
   '*://ehirej.51job.com/resumedtl/getresume*',
-  '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
   '*://www.zhipin.com/wapi/zpitem/web/boss/search/geek/info*',
   '*://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail',
   '*://rd6.zhaopin.com/api/job/detail?*',
@@ -4049,7 +4048,9 @@ const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list')),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const paramsList = findLiepinAttachmentParams(replayResponse);
-    const cacheableParams = paramsList.filter(params => params.resumeId);
+    const cacheableParams = paramsList.filter(
+      params => params.snapshotId && params.userId && params.resumeId
+    );
     for (const params of cacheableParams) {
       const cachedParams = { params, cachedAt: Date.now() };
       liepinAttachmentParamsByTab.set(
@@ -4504,6 +4505,9 @@ const yupaoGouTongResume$ = resumeSendHeadersV2Base$.pipe(
   retry()
 );
 
+// 聊天历史只用于缓存附件参数，不进入统一简历同步流。
+liepinChatAttachment$.subscribe();
+
 // 简历流聚合
 const mergedResume$ = merge(
   // 领英: 简历流 json含联系方式
@@ -4525,7 +4529,6 @@ const mergedResume$ = merge(
   // html采集
   htmlSync$,
   liePinChengLieTongPageResume$,
-  liepinChatAttachment$,
   liepinChatResume$,
   liepinCompanyResume$
 );
