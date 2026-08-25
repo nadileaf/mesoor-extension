@@ -432,6 +432,7 @@ const needCacheHeadersUrl = [
   '*://api-rcn.duolie.com/api/com.liepin.rcnresume.get-resume-detail*',
   // 猎聘诚猎通-沟通
   '*://api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail',
+  '*://api-h.liepin.com/api/com.liepin.im.h.chat.chat-list*',
   // 猎聘诚猎通-搜索
   '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume-detail',
   // 猎聘诚猎通-搜索-2026-0528新版
@@ -3046,6 +3047,198 @@ async function proxyFetchViaPage(url, options = {}, tabId) {
     });
   });
 }
+// 猎聘聊天页附件由页面生成临时签名 tdoss URL。仅缓存参数，
+// 供对应的 im-resume-detail 请求关联，避免提前下载或自行计算签名。
+const liepinAttachmentParamsByTab = new Map();
+const LIEPIN_ATTACHMENT_PARAM_TTL = 5 * 60 * 1000;
+const LIEPIN_ATTACHMENT_PARAM_MAX_PER_TAB = 10;
+
+const pruneLiepinTabAttachmentParams = tabId => {
+  const keyPrefix = `${tabId}:`;
+  const entries = [...liepinAttachmentParamsByTab.entries()]
+    .filter(([key]) => key.startsWith(keyPrefix))
+    .sort(([, first], [, second]) => first.cachedAt - second.cachedAt);
+  while (entries.length > LIEPIN_ATTACHMENT_PARAM_MAX_PER_TAB) {
+    const [oldestKey] = entries.shift();
+    liepinAttachmentParamsByTab.delete(oldestKey);
+  }
+};
+
+const clearLiepinTabCache = tabId => {
+  const keyPrefix = `${tabId}:`;
+  for (const key of liepinAttachmentParamsByTab.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      liepinAttachmentParamsByTab.delete(key);
+    }
+  }
+};
+
+const cleanupLiepinCache = () => {
+  const now = Date.now();
+  for (const [key, cached] of liepinAttachmentParamsByTab.entries()) {
+    if (now - cached.cachedAt >= LIEPIN_ATTACHMENT_PARAM_TTL) {
+      liepinAttachmentParamsByTab.delete(key);
+    }
+  }
+};
+
+browser.tabs.onRemoved.addListener(clearLiepinTabCache);
+setInterval(cleanupLiepinCache, 60 * 1000);
+
+const parseLiepinAttachmentValue = value => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  let parsed = value;
+  for (let index = 0; index < 2; index += 1) {
+    if (typeof parsed !== 'string') {
+      break;
+    }
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (error) {
+      break;
+    }
+  }
+  return parsed;
+};
+
+const findLiepinAttachmentPath = value => {
+  const parsedValue = parseLiepinAttachmentValue(value);
+  if (!parsedValue || typeof parsedValue !== 'object') {
+    return null;
+  }
+  const attachmentKeys = [
+    'downloadUrl',
+    'downloadPath',
+    'attachmentUrl',
+    'attachmentPath',
+    'fileUrl',
+    'url',
+    'path',
+  ];
+  for (const key of attachmentKeys) {
+    const candidate = parseLiepinAttachmentValue(parsedValue[key]);
+    if (typeof candidate === 'string' && candidate.length > 0) {
+      if (
+        candidate.startsWith('http://') ||
+        candidate.startsWith('https://') ||
+        candidate.includes('resume/attachment') ||
+        candidate.includes('tdoss.liepin.com/o/')
+      ) {
+        return candidate;
+      }
+    }
+  }
+  for (const [key, childValue] of Object.entries(parsedValue)) {
+    if (key === 'param' || key === 'attachmentResume' || typeof childValue === 'object') {
+      const nestedPath = findLiepinAttachmentPath(childValue);
+      if (nestedPath) {
+        return nestedPath;
+      }
+    }
+  }
+  return null;
+};
+
+const normalizeLiepinAttachmentUrl = attachmentPath => {
+  if (!attachmentPath) {
+    return null;
+  }
+  if (attachmentPath.startsWith('http://') || attachmentPath.startsWith('https://')) {
+    return attachmentPath;
+  }
+  return `https://tdoss.liepin.com/o/${attachmentPath.replace(/^\/+/, '')}`;
+};
+
+const findLiepinAttachmentParams = value => {
+  const parsedValue = parseLiepinAttachmentValue(value);
+  if (!parsedValue || typeof parsedValue !== 'object') {
+    return null;
+  }
+  if (parsedValue.attachmentResume?.param) {
+    const param = parseLiepinAttachmentValue(parsedValue.attachmentResume.param);
+    if (param?.encodeAttachmentId && (param.encodeUsercId || param.userId)) {
+      return {
+        snapshotId: param.encodeAttachmentId,
+        userId: param.encodeUsercId || param.userId,
+      };
+    }
+  }
+  for (const childValue of Object.values(parsedValue)) {
+    const result = findLiepinAttachmentParams(childValue);
+    if (result) {
+      return result;
+    }
+  }
+  return null;
+};
+
+const liepinAttachmentToBase64 = async (url, headers) => {
+  const response = await request(url, { headers });
+  const blob = await response.blob();
+  const fileContentB64 = await new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      resolve(result.includes(',') ? result.split(',')[1] : result);
+    };
+    reader.readAsDataURL(blob);
+  });
+  return { fileContentB64, responseHeaders: Object.fromEntries(response.headers.entries()) };
+};
+
+const findLiepinValueByKey = (value, key) => {
+  const parsedValue = parseLiepinAttachmentValue(value);
+  if (!parsedValue || typeof parsedValue !== 'object') {
+    return null;
+  }
+  if (parsedValue[key]) {
+    return parsedValue[key];
+  }
+  for (const childValue of Object.values(parsedValue)) {
+    const result = findLiepinValueByKey(childValue, key);
+    if (result) {
+      return result;
+    }
+  }
+  return null;
+};
+
+const fetchLiepinAttachment = async (params, headers) => {
+  const body = new URLSearchParams({
+    imId: '',
+    imApp: '1',
+    encryAttachmentSnapshotId: params.snapshotId,
+    encodeUsercId: params.userId,
+  }).toString();
+  const snapshotResponse = await request(
+    'https://api-h.liepin.com/api/com.liepin.rresume.userh.get-attachment-snapshot',
+    { method: 'POST', headers, body }
+  );
+  const snapshot = await snapshotResponse.json();
+  const path = snapshot?.data?.downloadPath || snapshot?.data?.accessPath;
+  if (!path) {
+    throw new Error('猎聘附件快照未返回下载地址');
+  }
+  return liepinAttachmentToBase64(normalizeLiepinAttachmentUrl(path), headers);
+};
+
+const getLiepinAttachmentParams = (tabId, userId) => {
+  if (!userId) {
+    return null;
+  }
+  const key = `${tabId}:${userId}`;
+  const cached = liepinAttachmentParamsByTab.get(key);
+  if (cached && Date.now() - cached.cachedAt < LIEPIN_ATTACHMENT_PARAM_TTL) {
+    return cached.params;
+  }
+  if (cached) {
+    liepinAttachmentParamsByTab.delete(key);
+  }
+  return null;
+};
+
 // 这个是重放器，配置的URL会执行重放
 const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   needCacheHeadersUrl
@@ -3825,6 +4018,93 @@ const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
   }),
   retry()
 );
+// 聊天历史已经包含附件快照参数，不需要用户点击附件。
+const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
+  filter(({ details }) => details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list')),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    const params = findLiepinAttachmentParams(replayResponse);
+    if (params) {
+      const cachedParams = { params, cachedAt: Date.now() };
+      liepinAttachmentParamsByTab.set(`${details.tabId}:${params.userId}`, cachedParams);
+      pruneLiepinTabAttachmentParams(details.tabId);
+    }
+    return null;
+  }),
+  filter(Boolean),
+  catchError(error => {
+    console.error('猎聘聊天历史附件处理错误:', error);
+    return of();
+  })
+);
+
+// 猎聘聊天页简历详情；附件参数来自 chat-list，按候选人精确关联。
+const liepinChatResume$ = resumeSendHeadersV2Base$.pipe(
+  filter(({ details }) =>
+    details.url.includes(
+      'api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail'
+    )
+  ),
+  mergeMap(async ({ details, replayResponse, headers }) => {
+    try {
+      const candidateUserId = findLiepinValueByKey(replayResponse, 'userId');
+      const params = getLiepinAttachmentParams(details.tabId, candidateUserId);
+      let fileContentB64 = [];
+      if (params) {
+        try {
+          const attachment = await fetchLiepinAttachment(params, headers);
+          fileContentB64.push({ ...attachment, type: 'resumeAttachment' });
+        } catch (error) {
+          console.error('猎聘附件快照获取失败:', error);
+        }
+      }
+      const attachmentResume =
+        replayResponse?.data?.attachmentResume ?? replayResponse?.attachmentResume;
+      const attachmentPath =
+        findLiepinAttachmentPath(attachmentResume) ||
+        findLiepinAttachmentPath(replayResponse?.data?.bizData?.attachmentResume);
+      const attachmentUrl = normalizeLiepinAttachmentUrl(attachmentPath);
+
+      if (attachmentUrl && fileContentB64.length === 0) {
+        const attachmentResponse = await request(attachmentUrl, {
+          headers: {
+            ...headers,
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          method: 'GET',
+        });
+        const blob = await attachmentResponse.blob();
+        const encoded = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        });
+        const responseHeaders = {};
+        attachmentResponse.headers.forEach((value, name) => {
+          responseHeaders[name] = value;
+        });
+        fileContentB64.push({
+          fileContentB64: encoded,
+          responseHeaders,
+          type: 'resumeAttachment',
+        });
+      }
+      return {
+        details,
+        headers,
+        body: { jsonBody: replayResponse, url: details.url, fileContentB64 },
+      };
+    } catch (error) {
+      console.error('猎聘聊天页附件处理错误:', error);
+      return {
+        details,
+        headers,
+        body: { jsonBody: replayResponse, url: details.url, fileContentB64: [] },
+      };
+    }
+  }),
+  retry()
+);
+
 // 猎聘企业版
 let requestCount = 0; // 用于记录请求次数
 const RESET_TIMEOUT = 10000; // 10秒后重置计数器
@@ -4185,6 +4465,8 @@ const mergedResume$ = merge(
   // html采集
   htmlSync$,
   liePinChengLieTongPageResume$,
+  liepinChatAttachment$,
+  liepinChatResume$,
   liepinCompanyResume$
 );
 mergedResume$
