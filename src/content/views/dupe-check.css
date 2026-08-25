@@ -57,9 +57,33 @@
   gap: 8px;
   padding: 8px 12px;
   cursor: pointer;
-  transition: all 0.2s ease-in-out;
+  transition:
+    width 0.25s ease-in-out,
+    min-width 0.25s ease-in-out,
+    padding 0.25s ease-in-out,
+    gap 0.25s ease-in-out,
+    box-shadow 0.2s ease-in-out,
+    transform 0.2s ease-in-out;
   border: none;
   outline: none;
+}
+
+.mesoor-extension-container .mesoor-card.collapsed {
+  width: 40px;
+  min-width: 40px;
+  padding: 6px;
+  gap: 0;
+  justify-content: center;
+}
+
+.mesoor-extension-container .mesoor-card.collapsed .mesoor-text {
+  flex: 0 0 0;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-width 0.2s ease-in-out,
+    opacity 0.15s ease-in-out;
 }
 
 .mesoor-extension-container .mesoor-card:hover {
@@ -95,6 +119,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  transition:
+    max-width 0.2s ease-in-out,
+    opacity 0.15s ease-in-out;
 }
 
 .mesoor-extension-container .mesoor-buttons {

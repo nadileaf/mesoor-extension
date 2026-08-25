@@ -36,6 +36,7 @@ interface ModernDupeCheckState {
   isActive: boolean;
   isSynchronizingResume: boolean;
   isSynchronized: boolean;
+  isCollapsed: boolean;
   isCheckingDupe: boolean;
   isChecked: boolean;
   isSyncResumeError: boolean;
@@ -110,6 +111,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       isActive,
       isSynchronizingResume: isActive,
       isSynchronized: false,
+      isCollapsed: false,
       isChecked: false,
       isCheckingDupe: false,
       isSyncResumeError: false,
@@ -124,6 +126,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
 
   // Refs
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const dragRef = useRef<HTMLDivElement>(null);
 
   // 重置状态的辅助函数
@@ -144,6 +147,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
         isActive,
         isSynchronizingResume: isActive,
         isSynchronized: false,
+        isCollapsed: false,
         isChecked: false,
         isCheckingDupe: false,
         isSyncResumeError: false,
@@ -525,11 +529,24 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       if (!isISyncResumeFeedbackMessage(msg)) return;
 
       console.debug('syncResumeReceiver', msg);
+      if (collapseTimeoutRef.current) {
+        clearTimeout(collapseTimeoutRef.current);
+      }
+
+      const isSyncError = msg.payload?.isSyncResumeError;
       resetState({
         isSynchronizingResume: false,
-        isSynchronized: true,
+        isSynchronized: !isSyncError,
+        isCollapsed: false,
         ...msg.payload,
       });
+
+      if (!isSyncError) {
+        collapseTimeoutRef.current = setTimeout(() => {
+          collapseTimeoutRef.current = null;
+          setState(prev => ({ ...prev, isCollapsed: true }));
+        }, 3000);
+      }
     };
 
     browser.runtime.onMessage.addListener(listener);
@@ -542,6 +559,10 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       if (!isISyncResumeStartMessage(msg)) return;
 
       console.info('syncResumeStartReceiver: ', msg);
+      if (collapseTimeoutRef.current) {
+        clearTimeout(collapseTimeoutRef.current);
+        collapseTimeoutRef.current = null;
+      }
       resetState(true, { requestId: msg.requestId });
 
       if (msg.payload.type !== 'other') {
@@ -609,6 +630,9 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      if (collapseTimeoutRef.current) {
+        clearTimeout(collapseTimeoutRef.current);
+      }
     };
   }, [syncResumeFeedbackReceiver, syncResumeStartReceiver, resetState]);
 
@@ -638,7 +662,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
         <div
           className={`mesoor-card drag-handle ${
             state.isDragging ? 'dragging' : ''
-          }`}
+          } ${state.isCollapsed ? 'collapsed' : ''}`}
           onClick={handleClick}
           onMouseDown={handleMouseDown}
         >
