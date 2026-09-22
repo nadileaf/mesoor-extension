@@ -2,8 +2,100 @@ import { isTabIdExists } from './tabCheck';
 import { from, interval } from 'rxjs';
 import { filter, switchMap } from 'rxjs/operators';
 import { delay } from './index';
+import { pickBestScrollableContainer, waitScrollStable } from './scroll-util';
 
 // 抓取HTML简历
+
+const LINKEDIN_PROFILE_RE = /linkedin\.com\/in\//i;
+
+function isLinkedInProfilePage(): boolean {
+  return LINKEDIN_PROFILE_RE.test(document.location.href);
+}
+
+// 领英个人主页是异步渲染：等 <main> 里出现区块再开始滚动，避免滚到空容器
+async function waitForLinkedInReady(timeoutMs = 10000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (document.querySelector('main section')) return;
+    await delay(300);
+  }
+}
+
+// 展开「… 更多 / see more」折叠文本；只点正文展开按钮，不点操作菜单「更多」
+function expandLinkedInSeeMore(): number {
+  const buttons = Array.from(
+    document.querySelectorAll<HTMLElement>('main button')
+  ).filter(btn => {
+    const text = (btn.innerText || '').trim();
+    const aria = btn.getAttribute('aria-label') || '';
+    return text.startsWith('…') || /see more|show more/i.test(aria);
+  });
+  buttons.forEach(btn => {
+    try {
+      btn.click();
+    } catch {
+      // ignore
+    }
+  });
+  return buttons.length;
+}
+
+// 领英主页滚动容器是 <main>（overflow:scroll），必须滚容器而非 window
+async function autoScrollLinkedIn(
+  maxIterations = 30,
+  stepDelayMs = 600
+): Promise<void> {
+  const container = pickBestScrollableContainer();
+  const scrollingElement =
+    document.scrollingElement || document.documentElement;
+  const isContainer = !!container;
+
+  const getTop = () =>
+    isContainer ? (container as Element).scrollTop : window.scrollY;
+  const getScrollHeight = () =>
+    isContainer
+      ? (container as Element).scrollHeight
+      : document.documentElement.scrollHeight || document.body.scrollHeight;
+  const getClientHeight = () =>
+    isContainer ? (container as Element).clientHeight : window.innerHeight;
+
+  const scrollToBottom = () => {
+    const top = Math.max(0, getScrollHeight() - getClientHeight());
+    if (isContainer) {
+      (container as Element).scrollTo({ top, behavior: 'auto' });
+    } else {
+      scrollingElement.scrollTo({ top, behavior: 'auto' });
+    }
+  };
+
+  let lastHeight = 0;
+  let stableRounds = 0;
+  for (let i = 0; i < maxIterations; i++) {
+    scrollToBottom();
+    await waitScrollStable(getTop, stepDelayMs);
+    const height = getScrollHeight();
+    if (height === lastHeight) {
+      stableRounds++;
+      if (stableRounds >= 3) break;
+    } else {
+      stableRounds = 0;
+      lastHeight = height;
+    }
+    await delay(stepDelayMs);
+  }
+}
+
+function scrollLinkedInToTop(): void {
+  const container = pickBestScrollableContainer();
+  if (container) {
+    (container as Element).scrollTo({ top: 0, behavior: 'auto' });
+  } else {
+    (document.scrollingElement || document.documentElement).scrollTo({
+      top: 0,
+      behavior: 'auto',
+    });
+  }
+}
 
 // 把HTML里面的图片元素后面插入一段其转成的base64
 function insertBase64(
@@ -96,6 +188,16 @@ export async function processHTML(): Promise<string> {
     } else {
       html = liepinHeadhunterContect(html);
     }
+  } else if (isLinkedInProfilePage()) {
+    // 领英异步渲染：等就绪 -> 展开折叠文本 -> 滚动触发懒加载 -> 再展开 -> 回顶
+    await waitForLinkedInReady();
+    expandLinkedInSeeMore();
+    await autoScrollLinkedIn();
+    expandLinkedInSeeMore();
+    await delay(300);
+    scrollLinkedInToTop();
+    await delay(100);
+    html = document.documentElement.outerHTML;
   }
   return html;
 }

@@ -1,4 +1,8 @@
 import browser from 'webextension-polyfill';
+import {
+  pickBestScrollableContainer,
+  waitScrollStable,
+} from '../utils/scroll-util';
 
 // 监听来自background的消息
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -190,49 +194,6 @@ async function blurElement(options) {
       className: element.className,
     },
   };
-}
-
-function isScrollableContainer(el) {
-  if (!el || el === document.body || el === document.documentElement)
-    return false;
-  const style = window.getComputedStyle(el);
-  const overflowY = style.overflowY;
-  const scrollableY =
-    overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
-  if (!scrollableY) return false;
-  return el.scrollHeight > el.clientHeight + 5;
-}
-
-function pickBestScrollableContainer() {
-  const all = Array.from(document.querySelectorAll('*'));
-  let best = null;
-  let bestDistance = 0;
-  for (const el of all) {
-    if (!isScrollableContainer(el)) continue;
-    const distance = el.scrollHeight - el.clientHeight;
-    if (distance > bestDistance) {
-      best = el;
-      bestDistance = distance;
-    }
-  }
-  return best;
-}
-
-async function waitScrollStable(getTop, maxWaitMs = 1500) {
-  const start = Date.now();
-  let stableCount = 0;
-  let lastTop = getTop();
-  while (Date.now() - start < maxWaitMs) {
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const top = getTop();
-    if (top === lastTop) {
-      stableCount++;
-    } else {
-      stableCount = 0;
-      lastTop = top;
-    }
-    if (stableCount >= 6) return;
-  }
 }
 
 async function scrollToBottomOnce(options) {

@@ -27,7 +27,8 @@ function shouldProcessThisUrl(url: string): boolean {
 console.log('sync-html: done');
 async function run() {
   if (location.href.includes('linkedin.com/in')) {
-    await delay(10000);
+    // 领英真正的等待/滚动在 processHTML 中处理，这里只做短暂延时
+    await delay(1500);
     console.log('抓取 LinkedIn 简历');
   } else {
     await delay(2000); // 抓取的时候页面可能没有完全加载完，所以等待一段时间再抓取
