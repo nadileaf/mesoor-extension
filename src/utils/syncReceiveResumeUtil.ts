@@ -2,29 +2,6 @@ import { isTabIdExists } from './tabCheck';
 import { from, interval } from 'rxjs';
 import { filter, switchMap } from 'rxjs/operators';
 import { delay } from './index';
-import { ResumeSyncErrorMessageWrapper } from '../models/stream';
-import { TipUser } from '../interfaces/storage';
-import { formatString } from './index';
-import { request } from '../utils/request';
-
-const checkResumeSyncResult = async (
-  checkApi: string,
-  user: TipUser,
-  period: number
-) => {
-  if (period >= 30) {
-    throw { response: { data: {}, status: 666 } };
-  }
-  try {
-    await request(checkApi, {
-      headers: {
-        Authorization: 'Bearer ' + user.token,
-      },
-    });
-  } catch (error) {
-    throw error;
-  }
-};
 
 // 抓取HTML简历
 
@@ -145,68 +122,4 @@ export const waitForSyncMessage = async (
     })) as boolean;
   }
   return true;
-};
-
-export const waitForResumeSyncResult = async (
-  tabId: number,
-  openid: string,
-  entityType: string,
-  user: TipUser,
-  syncResumeResultCheckUrl: string
-) => {
-  const checkApi: string = formatString(
-    syncResumeResultCheckUrl,
-    entityType,
-    openid
-  );
-  let isOver: boolean = false;
-  let isError: boolean = false;
-  let errorMessage: ResumeSyncErrorMessageWrapper | null = null;
-  const resumeCheckerSubscription = interval(2000).subscribe(
-    async (period: number) => {
-      if (!(await isTabIdExists(tabId))) {
-        resumeCheckerSubscription.unsubscribe();
-        isOver = true;
-        return;
-      }
-      checkResumeSyncResult(checkApi, user, period).then(
-        _value => {
-          resumeCheckerSubscription.unsubscribe();
-          isOver = true;
-        },
-        error => {
-          // tslint:disable-next-line:max-line-length
-          if (
-            error.hasOwnProperty('response') &&
-            error.response.hasOwnProperty('status') &&
-            error.response.status !== 404
-          ) {
-            resumeCheckerSubscription.unsubscribe();
-            isOver = true;
-            isError = true;
-            errorMessage = {
-              response: {
-                status: error.response.status,
-                data: error.response.data,
-              },
-            };
-          }
-        }
-      );
-    }
-  );
-  await new Promise(resolve => {
-    const resultCheckerSubscription = interval(400).subscribe(() => {
-      if (isOver) {
-        resultCheckerSubscription.unsubscribe();
-        resolve(1);
-      }
-    });
-  });
-  if (isError) {
-    if (errorMessage) {
-      throw errorMessage;
-    }
-    throw {};
-  }
 };

@@ -190,10 +190,10 @@ export type ISyncResumeFeedbackMessage = IMessage<
     errorMessage?: string; // 报错的信息
     openId?: string;
     tenant?: string;
-    // 可选：后端提供的跳转信息（优先级更高）
+    // 可选：后端提供的查看链接（同步完成后点击跳转）
     redirect?: {
       url: string;
-      text: string;
+      text?: string;
     };
   }
 >;

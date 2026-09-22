@@ -27,10 +27,7 @@ import {
 } from 'rxjs/operators';
 import { v4 as uuid } from 'uuid';
 import browser from 'webextension-polyfill';
-import {
-  waitForResumeSyncResult,
-  waitForSyncMessage,
-} from './utils/syncReceiveResumeUtil.js';
+import { waitForSyncMessage } from './utils/syncReceiveResumeUtil.js';
 
 // 导入user流
 import { user$ } from './models/user.ts';
@@ -81,9 +78,6 @@ console.log('环境变量生效配置:', {
   enableAutoLinkedInEmail,
   disableResumeSync,
 });
-// 使用{0}表示entityType，{1}表示openId
-const getSyncEntityResultCheckUrl = () =>
-  getRuntimeConfig().spaceServer + `/v2/entities/{0}/{1}?_proxy=true`;
 
 let requestsHeaderMap = new Map();
 // tabId|url|method → timestamp，追踪正在进行的代理重放，防止回环
@@ -4585,6 +4579,7 @@ mergedResume$
         },
       };
       const { details, headers, body } = data;
+      let shouldSendFeedback = true;
       try {
         const extensionVersion = browser.runtime.getManifest().version;
         const bodyUrl = details.url;
@@ -4653,56 +4648,42 @@ mergedResume$
             body: JSON.stringify(requestBody),
           }
         );
-        if (syncEntityResponse.status !== 200) {
-          syncResumeFeedbackMsg.payload.isSyncResumeError = true;
-          browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
-          return;
-        }
         const syncEntityResponseData = await syncEntityResponse.json();
-        
+
         // 如果服务器返回 pass: true，表示跳过此次同步（如非主实体）
+        // 静默处理：不发任何反馈，前端不提示
         if (syncEntityResponseData.pass === true) {
           console.log('服务器返回 pass=true，跳过同步:', syncEntityResponseData.msg);
-          
-          // 如果提供了 redirect 信息，则显示提示；否则静默跳过
-          if (syncEntityResponseData.data?.redirect) {
-            const { redirect } = syncEntityResponseData.data;
-            syncResumeFeedbackMsg.payload.isSyncResumeError = false;
-            syncResumeFeedbackMsg.payload.redirect = redirect;
-            browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
-          }
+          shouldSendFeedback = false;
           return;
         }
-        
-        const { openId, entityType, tenantId, redirect } = syncEntityResponseData.data;
-        await waitForResumeSyncResult(
-          details.tabId,
-          openId,
-          entityType,
-          user,
-          getSyncEntityResultCheckUrl()
-        );
+
+        // 成功判定：200 且 JSON status === true（不再轮询）
+        if (syncEntityResponseData.status !== true) {
+          console.error('同步失败，status 非 true:', syncEntityResponseData);
+          syncResumeFeedbackMsg.payload.isSyncResumeError = true;
+          return;
+        }
+
+        const { openId, entityType, tenantId, viewUrl } =
+          syncEntityResponseData.data ?? {};
         syncResumeFeedbackMsg.payload.openId = openId;
         syncResumeFeedbackMsg.payload.tenant = tenantId;
         syncResumeFeedbackMsg.payload.entityType = entityType;
-        // 如果后端返回了 redirect 信息，传递给前端
-        if (redirect) {
-          syncResumeFeedbackMsg.payload.redirect = redirect;
+        // 后端返回的查看链接，供前端点击跳转
+        if (viewUrl) {
+          syncResumeFeedbackMsg.payload.redirect = { url: viewUrl };
         }
-        browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
         return { syncEntityResponse, openId, entityType, tenantId };
       } catch (error) {
-        if (error.response) {
-          syncResumeFeedbackMsg.payload.errorCode = error.response.status;
-          syncResumeFeedbackMsg.payload.errorMessage = JSON.stringify(
-            error.response.data
-          );
-        }
+        // HTTP 非 200（响应体通常非 JSON）统一提示同步失败
         console.error('简历同步过程中出错:', error);
         syncResumeFeedbackMsg.payload.isSyncResumeError = true;
       } finally {
-        console.log('syncResumeFeedbackMsg', syncResumeFeedbackMsg);
-        browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+        if (shouldSendFeedback) {
+          console.log('syncResumeFeedbackMsg', syncResumeFeedbackMsg);
+          browser.tabs.sendMessage(details.tabId, syncResumeFeedbackMsg);
+        }
       }
     }),
     catchError(error => {

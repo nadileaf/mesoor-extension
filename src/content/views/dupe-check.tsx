@@ -31,6 +31,22 @@ const isPersonalPlug = personalList.includes(
   browser.runtime.getManifest().name
 );
 
+// 后端 entityType（candidate/job）→ 展示名 / 路由类型
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  candidate: '人才库简历',
+  Resume: '人才库简历',
+  job: '职位库职位',
+  Job: '职位库职位',
+};
+
+function toEntityLabel(entityType?: string): string {
+  return (entityType && ENTITY_TYPE_LABELS[entityType]) || '简历';
+}
+
+function toRouteEntityType(entityType?: string): 'Resume' | 'Job' {
+  return entityType === 'job' || entityType === 'Job' ? 'Job' : 'Resume';
+}
+
 // 组件状态接口
 interface ModernDupeCheckState {
   isActive: boolean;
@@ -45,17 +61,15 @@ interface ModernDupeCheckState {
   openId?: string;
   tenant?: string;
   isDragging: boolean;
-  errorCode?: number;
-  errorMessage?: string;
   env: string;
   wait: boolean;
   isConfirmSynchronize: boolean;
   requestId?: string;
-  entityType: 'Resume' | 'Job';
-  // 可选：后端提供的跳转信息
+  entityType: string;
+  // 可选：后端提供的查看链接
   redirect?: {
     url: string;
-    text: string;
+    text?: string;
   };
 }
 
@@ -172,35 +186,18 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       isChecked,
       wait,
       dupeCheckResult,
-      errorCode,
-      errorMessage,
       isConfirmSynchronize,
     } = state;
-    const entityTypeMap = {
-      Resume: '人才库简历',
-      Job: '职位库职位',
-    };
+    const entityLabel = toEntityLabel(state.entityType);
     if (!isActive) return '未激活';
 
-    if (isSyncResumeError && errorCode === 403) return '已到达资源限制';
-    if (isSyncResumeError && errorCode === 480) return '简历解析出错';
-    if (isSyncResumeError && errorCode === 666) return '同步简历超时';
-    if (isSyncResumeError && errorCode === 430) {
-      try {
-        return errorMessage
-          ? JSON.parse(errorMessage).message || '同步简历失败'
-          : '同步简历失败';
-      } catch {
-        return '同步简历失败';
-      }
-    }
-    if (isSyncResumeError) return '同步简历失败';
+    if (isSyncResumeError) return '同步失败';
 
     if (isSynchronizingResume) {
       return wait
         ? isConfirmSynchronize
           ? `正在同步...`
-          : `点击同步${entityTypeMap[state.entityType]}`
+          : `点击同步${entityLabel}`
         : `正在同步...`;
     }
 
@@ -213,9 +210,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
     }
 
     if (isChecked && !isNil(dupeCheckResult)) {
-      return dupeCheckResult
-        ? `查重完成，点击查看${entityTypeMap[state.entityType]}`
-        : `查重完成，点击查看${entityTypeMap[state.entityType]}`;
+      return `查重完成，点击查看${entityLabel}`;
     }
 
     // 优先使用后端返回的文案，否则使用默认文案
@@ -223,7 +218,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       return state.redirect.text;
     }
 
-    return `同步完成，点击查看${entityTypeMap[state.entityType]}`;
+    return `同步完成，点击查看${entityLabel}`;
   }, [state]);
 
   // 获取图标
@@ -368,7 +363,7 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       if (!openId) return;
       const url = buildEntityDetailUrl({
         host: env,
-        entityType,
+        entityType: toRouteEntityType(entityType),
         openId,
       });
       window.open(url);
