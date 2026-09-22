@@ -1,0 +1,16 @@
+{
+  "_comment": "运行时配置：本地/私有部署后，直接修改本文件即可切换域名，无需重新构建。留空的字段使用构建期 .env 默认值。",
+  "platformBaseUrl": "",
+  "userServicePrefix": "/api/user-proxy",
+  "tokenCookieName": "platform-access-token",
+  "wsServer": "",
+  "backgroundServerHost": "",
+  "spaceServer": "",
+  "domainHost": "",
+  "frontendHost": "",
+  "actionConfigHost": "",
+  "agentHost": "",
+  "updateCdnBaseUrl": "",
+  "sourcingAgentUrl": "",
+  "entityRouteMode": ""
+}

@@ -1,21 +1,21 @@
-import { combineLatest, concat, from, of, timer } from 'rxjs';
+import { combineLatest, concat, from, of, timer, Observable } from 'rxjs';
 import {
+  debounceTime,
   distinctUntilChanged,
   filter,
   map,
-  scan,
   shareReplay,
   switchMap,
   tap,
 } from 'rxjs/operators';
-import type { Cookies } from 'webextension-polyfill';
 import browser from 'webextension-polyfill';
 import { LocalStorage, TipUser, FSGUser } from '../interfaces/storage.ts';
 
 import { parseJwt } from '../utils/user-utils';
 import { localstorageChange$ } from './storage';
-import { onCookiesChange$ } from './stream';
+import { onCookiesChangeInfo$ } from './stream';
 import { isTokenExpired } from '../utils/fsg-user-utils';
+import { getRuntimeConfig, loadRuntimeConfig } from '../utils/runtime-config';
 
 // env$
 export const fromStorage$ = from(
@@ -36,13 +36,19 @@ const envChange$ = localstorageChange$.pipe(
 
 export const env$ = concat(fromStorage$, envChange$).pipe(shareReplay(1));
 
-const getCookieQuery = (url: string): Cookies.GetAllDetailsType => {
-  // 使用 { url } 精确查询，避免 getDomain 提取父域名后
-  // 导致 tip-test.nadileaf.com 和 inzight.nadileaf.com 互相串 token
-  return { url };
-};
+// 平台 access token 所在的 cookie（新前端方案）：
+// 服务端每次刷新都会重设 platform-access-token，扩展只被动读取，不主动刷新。
+// 兼容旧的 access_token / token cookie，按优先级取。
+const FALLBACK_TOKEN_COOKIE_NAMES = ['access_token', 'token'];
 
-const tokenCookieNames = ['access_token', 'token'];
+// 平台 access token cookie 名可由 config.json 配置，默认 platform-access-token；
+// 兼容旧的 access_token / token，按优先级取。
+function tokenCookieNames(): string[] {
+  const primary = getRuntimeConfig().tokenCookieName || 'platform-access-token';
+  return [primary, ...FALLBACK_TOKEN_COOKIE_NAMES].filter(
+    (name, index, all) => !!name && all.indexOf(name) === index
+  );
+}
 const extensionDefaultToken =
   import.meta.env.VITE_EXTENSION_DEFAULT_TOKEN?.trim();
 
@@ -54,7 +60,80 @@ const wsIdentityKey = import.meta.env.VITE_WS_IDENTITY_KEY || 'token';
 // 鉴权模式：cookie | storage_token
 const authMode = import.meta.env.VITE_AUTH_MODE || 'cookie';
 
-function compareUserIdentity(pre: TipUser, cur: TipUser): boolean {
+/**
+ * token cookie 的查询地址。
+ * 带上 userServicePrefix 路径，才能命中 path=/api/user-proxy 的 platform-access-token；
+ * 对旧 host 无害（path=/ 的 cookie 任意路径都能命中）。
+ */
+function getTokenQueryUrl(): string {
+  const cfg = getRuntimeConfig();
+  const base = cfg.platformBaseUrl || import.meta.env.VITE_TOKEN_HOST;
+  const prefix = (cfg.userServicePrefix || '').replace(/\/+$/, '');
+  return `${base}${prefix}/`;
+}
+
+function safeParseJwt(token: unknown): TipUser | null {
+  if (typeof token !== 'string') return null;
+  try {
+    return parseJwt(token);
+  } catch (error) {
+    console.warn('[user$] 解析 JWT 失败:', error);
+    return null;
+  }
+}
+
+function decodeCookieValue(value: string): string {
+  let decoded = decodeURIComponent(value);
+  try {
+    decoded = JSON.parse(decoded);
+  } catch {
+    // 解析失败，使用原值（JWT 字符串）
+  }
+  return decoded;
+}
+
+/**
+ * 查询当前所有相关 token cookie，按优先级与 iat 取最新可用的一个。
+ * 没有可用 token（未登录/已过期/被清除）时返回 null —— 用于驱动登出。
+ */
+async function readTokenUser(): Promise<TipUser | null> {
+  try {
+    const names = tokenCookieNames();
+    const cookies = await browser.cookies.getAll({ url: getTokenQueryUrl() });
+    const tokenCookies = cookies.filter(c => names.includes(c.name));
+    if (tokenCookies.length === 0) return null;
+
+    const parsed = tokenCookies
+      .map(cookie => {
+        const token = decodeCookieValue(cookie.value);
+        const payload = safeParseJwt(token);
+        return { cookie, token, payload, iat: payload?.iat || 0 };
+      })
+      .filter(item => !!item.payload);
+
+    if (parsed.length === 0) return null;
+
+    parsed.sort((a, b) => {
+      const namePriority =
+        names.indexOf(a.cookie.name) - names.indexOf(b.cookie.name);
+      if (namePriority !== 0) return namePriority;
+      return b.iat - a.iat;
+    });
+
+    const best = parsed[0];
+    return { ...best.payload!, token: best.token as string };
+  } catch (error) {
+    console.error('[user$] 读取 token cookie 失败:', error);
+    return null;
+  }
+}
+
+function compareUserIdentity(
+  pre: TipUser | null,
+  cur: TipUser | null
+): boolean {
+  if (!pre || !cur) return pre === cur;
+
   // 先比较租户信息，租户变化必须重连
   if (pre.tenantAlias !== cur.tenantAlias || pre.tenantId !== cur.tenantId) {
     return false;
@@ -70,74 +149,20 @@ function compareUserIdentity(pre: TipUser, cur: TipUser): boolean {
 }
 
 /**
- * current sync storage stream
+ * 从 cookie 读取用户：初始查询 + 监听 cookie 变化重新查询。
+ * 变化（刷新轮换、切换租户、登出删除）都会重新计算，登出时发出 null。
  */
-// TODO 按照这个user流来说，当用户退出或者清除cookie的时候，socket不会断开连接并且手抓以及自动搜都还可以继续使用。
-// 租户token都是使用断开连接之前的，因为这个cookiechange代表着改变，谁改变这个cookie就是谁(即就算被清除了也算是change)，而scan又会返回之前的值
-// 所以user流里的返回值有着较大缺陷(distinctUntilChanged不会让你重复触发连续一样的流的值)，只有在刚安装插件时才奏效，一旦登录过后，退出登录后仍可继续使用直至浏览器完全退出(进程全部结束)。
-// 如果想要修改这个，加一个新流和一个新的storage，在cookiechange的时候查询所有相关cookie，少了一个就设置这个storage，同时socket$流combineLast里面多加入一个流即可。
-const cookieUser$ = env$.pipe(
-  switchMap(_env => {
-    const cookieQuery = getCookieQuery(import.meta.env.VITE_TOKEN_HOST);
-    const getCookies = browser.cookies.getAll(cookieQuery);
-    return concat(
-      from(getCookies).pipe(
-        // 将所有 cookies 收集到数组中
-        map(cookies => cookies.filter(c => tokenCookieNames.includes(c.name))),
-        // 解析所有 token 并按 iat 时间戳排序，取最新的
-        map(tokenCookies => {
-          if (tokenCookies.length === 0) return [];
-
-          const parsedTokens = tokenCookies.map(cookie => {
-            let decodedValue = decodeURIComponent(cookie.value);
-            try {
-              decodedValue = JSON.parse(decodedValue);
-            } catch (_e) {
-              // 解析失败，使用原值
-            }
-            const parsed = parseJwt(decodedValue);
-            return {
-              cookie,
-              parsed,
-              token: decodedValue,
-              iat: parsed.iat || 0,
-            };
-          });
-
-          parsedTokens.sort((a, b) => {
-            const namePriority =
-              tokenCookieNames.indexOf(a.cookie.name) -
-              tokenCookieNames.indexOf(b.cookie.name);
-            if (namePriority !== 0) {
-              return namePriority;
-            }
-            return b.iat - a.iat;
-          });
-          return parsedTokens.length > 0 ? [parsedTokens[0].cookie] : [];
-        }),
-        // 展开数组
-        switchMap(cookies => from(cookies))
-      ),
-      onCookiesChange$(import.meta.env.VITE_TOKEN_HOST).pipe(
-        filter(cookie => tokenCookieNames.includes(cookie.name))
+const cookieUser$: Observable<TipUser | null> = from(loadRuntimeConfig()).pipe(
+  switchMap(() =>
+    concat(
+      from(readTokenUser()),
+      onCookiesChangeInfo$(getTokenQueryUrl()).pipe(
+        filter(info => tokenCookieNames().includes(info.cookie.name)),
+        debounceTime(50),
+        switchMap(() => from(readTokenUser()))
       )
-    );
-  }),
-  scan((user: Partial<TipUser>, cookie: Cookies.Cookie) => {
-    const { value } = cookie;
-    let decodedValue = decodeURIComponent(value);
-
-    try {
-      decodedValue = JSON.parse(decodedValue);
-    } catch (_e) {
-      // 解析失败，使用原值
-    }
-    const tipUser = {
-      ...parseJwt(decodedValue),
-      token: decodedValue,
-    };
-    return { ...user, ...tipUser };
-  }, {})
+    )
+  )
 );
 
 // Storage token 模式：从 chrome.storage.local.fsgUser 读取 token
@@ -158,107 +183,72 @@ const storageUser$ = concat(
       return null;
     }
 
-    // 检查 token 是否过期
     if (isTokenExpired(fsgUser.token)) {
       console.log('[storageUser$] token 已过期，返回 null');
       return null;
     }
 
-    // 解析 JWT 获取用户信息
-    const jwtPayload = parseJwt(fsgUser.token);
-    console.log('[storageUser$] 解析 JWT payload:', jwtPayload);
+    const jwtPayload = safeParseJwt(fsgUser.token);
+    if (!jwtPayload) return null;
 
-    return {
-      ...jwtPayload,
-      token: fsgUser.token,
-    };
-  }),
-  tap(user => console.log('[storageUser$] 最终用户对象:', user))
+    return { ...jwtPayload, token: fsgUser.token };
+  })
 );
 
-export const user$ = extensionDefaultToken
+export const user$: Observable<TipUser | null> = extensionDefaultToken
   ? of({
-      ...parseJwt(extensionDefaultToken),
+      ...safeParseJwt(extensionDefaultToken),
       token: extensionDefaultToken,
-    }).pipe(
-      filter(isUser),
+    } as TipUser).pipe(
       distinctUntilChanged(compareUserIdentity),
       shareReplay(1)
     )
   : authMode === 'storage_token'
     ? storageUser$.pipe(
-        filter((user): user is TipUser => user !== null),
-        filter(isUser),
         distinctUntilChanged(compareUserIdentity),
         shareReplay(1)
       )
     : cookieUser$.pipe(
-        filter(isUser),
         distinctUntilChanged(compareUserIdentity),
         shareReplay(1)
       );
 
-export const isLogin = async (env: string): Promise<Map<string, string>> => {
-  const cookies = await browser.cookies.getAll(getCookieQuery(env));
-  let cookieObj: Map<string, string> = new Map();
+export const isLogin = async (_env?: string): Promise<Map<string, string>> => {
+  const cookies = await browser.cookies.getAll({ url: getTokenQueryUrl() });
+  const cookieObj: Map<string, string> = new Map();
   cookies.forEach(cookie => {
-    if (tokenCookieNames.includes(cookie.name)) {
+    if (tokenCookieNames().includes(cookie.name)) {
       cookieObj.set(cookie.name, cookie.value);
     }
   });
   return cookieObj;
 };
 
-// 定时检查用户是否登录（host/id/token是否都在）
-export const userCookieCheck$ = combineLatest(
-  env$,
-  timer(1000 * 10, 1000 * 60 * 60)
-) // 启动后的十秒，以及之后的每小时检测一次
-  .pipe(
-    switchMap(async ([env]) => {
-      if (!env) {
-        return false;
-      }
-      const _isLogin = await isLogin(env);
-      return _isLogin.size === 1;
-    })
-  );
-
-function isUser(user: object): user is TipUser {
-  return 'token' in user && typeof (user as TipUser).token === 'string';
-}
+// 定时检查用户是否登录（token cookie 是否存在）
+export const userCookieCheck$ = combineLatest([
+  from(loadRuntimeConfig()),
+  timer(1000 * 10, 1000 * 60 * 60),
+]).pipe(
+  // 启动后的十秒，以及之后的每小时检测一次
+  switchMap(async () => {
+    try {
+      const _isLogin = await isLogin();
+      return _isLogin.size > 0;
+    } catch {
+      return false;
+    }
+  })
+);
 
 export const clearUserCookie = () => {
-  return new Promise((resolve, reject) => {
-    const envSubscribe = env$.subscribe(async env => {
-      try {
-        if (!env) {
-          reject(new Error('env is not available'));
-          return;
-        }
-        const domain = env;
+  const cfg = getRuntimeConfig();
+  const base = cfg.platformBaseUrl || import.meta.env.VITE_TOKEN_HOST;
 
-        await Promise.all(
-          tokenCookieNames.map(name =>
-            browser.cookies.remove({
-              url: `https://${domain}/`,
-              name,
-            })
-          )
-        );
-        const query = await browser.tabs.query({
-          url: `https://${domain}/*`,
-        });
-        query.map(tab => {
-          browser.tabs.reload(tab.id);
-        });
-        envSubscribe.unsubscribe();
-        resolve(true);
-      } catch (err) {
-        reject(err);
-      }
-    });
-  });
+  return Promise.all(
+    tokenCookieNames().map(name =>
+      browser.cookies.remove({ url: `${base}/`, name }).catch(() => undefined)
+    )
+  );
 };
 
 export const getDeafultUserStream = (defaultUser: TipUser) => {

@@ -48,17 +48,20 @@ import {
   isSyncHtmlMessage,
 } from './utils/message-fileter.ts';
 import * as qs from 'qs';
+import {
+  loadRuntimeConfig,
+  getRuntimeConfig,
+} from './utils/runtime-config.ts';
+
+// 运行时配置：打包后可通过扩展根目录 config.json 覆盖域名（本地部署免重打包）
+// 注意：MV3 Service Worker 禁止顶层 await，这里只触发加载，读取一律用 getRuntimeConfig()
+const runtimeConfigReady = loadRuntimeConfig();
 
 // 直接定义消息类型常量
 const MessageType = {
   RECEIVE_HTML: 'receive_html',
 };
-const WS_SERVER = import.meta.env.VITE_WS_SERVER;
 const difyUserName = 'extension-button';
-const BACKGROUND_SERVER_HOST = import.meta.env.VITE_BACKGROUND_SERVER_HOST;
-const Token_Host = import.meta.env.VITE_TOKEN_HOST;
-const spaceServer = import.meta.env.VITE_SPACE_SERVER;
-const EntityExecuteHost = `${BACKGROUND_SERVER_HOST}`;
 const enableSocketConnection =
   import.meta.env.VITE_ENABLE_SOCKET_CONNECTION === 'true';
 const enableAutoSyncResume =
@@ -67,25 +70,20 @@ const enableAutoLinkedInEmail =
   import.meta.env.VITE_ENABLE_AUTO_LINKEDIN_EMAIL === 'true';
 const disableResumeSync =
   import.meta.env.VITE_DISABLE_RESUME_SYNC === 'true';
-const defaultEnv = import.meta.env.VITE_DOMAIN_HOST;
 const extensionDefaultToken =
   import.meta.env.VITE_EXTENSION_DEFAULT_TOKEN?.trim();
 // 输出环境变量日志
 console.log('环境变量加载配置:', import.meta.env);
 console.log('环境变量生效配置:', {
-  WS_SERVER,
-  BACKGROUND_SERVER_HOST,
-  Token_Host,
-  spaceServer,
-  EntityExecuteHost,
+  ...getRuntimeConfig(),
   enableSocketConnection,
   enableAutoSyncResume,
   enableAutoLinkedInEmail,
   disableResumeSync,
 });
 // 使用{0}表示entityType，{1}表示openId
-const syncEntityResultCheckUrl =
-  spaceServer + `/v2/entities/{0}/{1}?_proxy=true`;
+const getSyncEntityResultCheckUrl = () =>
+  getRuntimeConfig().spaceServer + `/v2/entities/{0}/{1}?_proxy=true`;
 
 let requestsHeaderMap = new Map();
 // tabId|url|method → timestamp，追踪正在进行的代理重放，防止回环
@@ -96,7 +94,14 @@ let wait = null;
 const tabsObject = {};
 // 存储按 tabId 维度的额外同步数据，由 WebSocket 消息写入，在接口同步时一起发送
 const tabExtraDataByTabId = {};
-const tokenCookieNames = ['access_token', 'token'];
+// platform-access-token 由新前端服务端在每次刷新时重设，扩展被动读取（优先级最高）
+function tokenCookieNames() {
+  const primary =
+    getRuntimeConfig().tokenCookieName || 'platform-access-token';
+  return [primary, 'access_token', 'token'].filter(
+    (name, index, all) => !!name && all.indexOf(name) === index
+  );
+}
 // 存储按 tabId 维度的网络请求监听器，用于 MonitorNetworkAction
 const networkMonitors = new Map();
 
@@ -147,8 +152,10 @@ browser.runtime.onInstalled.addListener(async detail => {
     await browser.storage.sync.set({ linkedInEmailWait: { isEmailWait: !enableAutoLinkedInEmail } });
   }
 
-  await browser.storage.local.set({ env: defaultEnv, activities: {} });
-  console.log('[onInstalled] 已设置 env:', defaultEnv);
+  const resolvedConfig = await runtimeConfigReady;
+  const envHost = resolvedConfig.domainHost || import.meta.env.VITE_DOMAIN_HOST;
+  await browser.storage.local.set({ env: envHost, activities: {} });
+  console.log('[onInstalled] 已设置 env:', envHost);
   console.log('[onInstalled] 初始化完成');
 
   // 等待一小段时间，确保 storage 设置完成并触发 change 事件
@@ -525,19 +532,27 @@ maimaiTokenManager.initialize().catch(e =>
   console.warn('[MaimaiToken] 初始化失败, 将在首次请求时注册:', e)
 );
 
-async function getTokenFromTip() {
+// token cookie 查询地址：带上 userServicePrefix，才能命中 path=/api/user-proxy 的 platform-access-token
+function getTokenQueryUrl() {
+  const prefix = (
+    getRuntimeConfig().userServicePrefix || ''
+  ).replace(/\/+$/, '');
+  return `${getRuntimeConfig().platformBaseUrl}${prefix}/`;
+}
+
+// 读取平台 access token：优先 platform-access-token，其次 access_token / token
+async function readPlatformToken() {
   if (extensionDefaultToken) {
     return extensionDefaultToken;
   }
-
   try {
-    for (const name of tokenCookieNames) {
-      const cookies = await browser.cookies.get({
-        url: Token_Host,
+    for (const name of tokenCookieNames()) {
+      const cookie = await browser.cookies.get({
+        url: getTokenQueryUrl(),
         name,
       });
-      if (cookies) {
-        return cookies.value;
+      if (cookie && cookie.value) {
+        return cookie.value;
       }
     }
     return null;
@@ -547,6 +562,10 @@ async function getTokenFromTip() {
   }
 }
 
+async function getTokenFromTip() {
+  return readPlatformToken();
+}
+
 function connectWebSocket(user) {
   console.log('[connectWebSocket] 开始连接, user:', user);
   if (!user) {
@@ -554,7 +573,7 @@ function connectWebSocket(user) {
     return null;
   }
 
-  const wsUrl = `${WS_SERVER}/ws?token=${user.token}`;
+  const wsUrl = `${getRuntimeConfig().wsServer}/ws?token=${user.token}`;
   console.log('[connectWebSocket] WebSocket URL:', wsUrl);
   const socket = new WebSocket(wsUrl);
   let reconnectTimeout;
@@ -2667,54 +2686,35 @@ browser.action.onClicked.addListener(async tab => {
 
 // 直接从 cookie 中获取 token
 async function getTokenFromCookie() {
-  if (extensionDefaultToken) {
-    return extensionDefaultToken;
-  }
-
-  try {
-    for (const name of tokenCookieNames) {
-      const token_obj = await browser.cookies.get({
-        url: Token_Host,
-        name,
-      });
-      if (token_obj && token_obj.value) {
-        return token_obj.value;
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error('获取 token 时出错:', error);
-    return null;
-  }
+  return readPlatformToken();
 }
 
 // 当用户触发Dify AI-Source的链接时里的Get请求时是没带token的，
 // 所以需要在请求发送前的事件中添加token重放请求
-// 动态构建监听的 URL 列表，支持自定义 host
-const actionConfigHost = import.meta.env.VITE_ACTION_CONFIG_HOST || 'web-extension-use.mesoor.com';
-// webRequest 的 URL 模式不支持 host:port 格式，需要特殊处理
-const actionConfigUrls = actionConfigHost.includes(':')
-  ? [
-      // localhost 需要使用 <all_urls> 然后在回调中过滤
-      '*://localhost/v1/actions/configs/id*',
-      'http://localhost/v1/actions/configs/id*',
-    ]
-  : [`*://${actionConfigHost}/v1/actions/configs/id*`];
+// URL 模式用通配 host 注册，实际 host 在回调里按运行时配置校验（config.json 可覆盖 actionConfigHost）
+const actionConfigUrlPatterns = [
+  '*://*/v1/actions/configs/id*',
+  'http://localhost/v1/actions/configs/id*',
+];
 
 browser.webRequest.onBeforeRequest.addListener(
   details => {
     // 只处理来自标签页的GET请求
     if (details.tabId !== -1 && details.method === 'GET') {
-      // 如果配置了带端口的 host（如 localhost:8080），需要额外检查 URL 是否匹配
-      if (actionConfigHost.includes(':')) {
+      // 按运行时配置校验 host（支持 host:port），不匹配则跳过
+      const actionConfigHost =
+        getRuntimeConfig().actionConfigHost ||
+        import.meta.env.VITE_ACTION_CONFIG_HOST ||
+        'web-extension-use.mesoor.com';
+      try {
         const url = new URL(details.url);
-        const expectedHost = actionConfigHost.split(':')[0];
-        const expectedPort = actionConfigHost.split(':')[1];
-        if (url.hostname !== expectedHost || url.port !== expectedPort) {
-          return; // URL 不匹配，跳过
-        }
+        const [expectedHost, expectedPort] = actionConfigHost.split(':');
+        if (url.hostname !== expectedHost) return;
+        if (expectedPort && url.port !== expectedPort) return;
+      } catch {
+        return;
       }
-      
+
       (async () => {
         try {
           // 直接从 cookie 中获取 token
@@ -2743,7 +2743,7 @@ browser.webRequest.onBeforeRequest.addListener(
     }
   },
   {
-    urls: actionConfigUrls,
+    urls: actionConfigUrlPatterns,
   }
 );
 
@@ -2770,7 +2770,8 @@ async function injectButton2dify(url, tabId, config, jobId, resumeId) {
     };
     // VITE_AGENT_HOST=agent.mesoor.com
     // =app-q7ip7PqzrLJGc4siEtBhrjay
-    const agentBaseUrl = import.meta.env.VITE_AGENT_HOST;
+    const agentBaseUrl =
+      getRuntimeConfig().agentHost || import.meta.env.VITE_AGENT_HOST;
     const response = await fetch(`${agentBaseUrl}/v1/workflows/run`, {
       method: 'POST',
       headers: {
@@ -4325,6 +4326,7 @@ const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
 const htmlSync$ = message$.pipe(
   filter(isSyncHtmlMessage),
   withLatestFrom(user$),
+  filter(([, user]) => !!user),
   tap(message => {
     console.log('htmlSync$ recieved: ', message);
   }),
@@ -4641,7 +4643,7 @@ mergedResume$
         };
         console.log('发送到服务器的requestBody:', requestBody);
         const syncEntityResponse = await request(
-          EntityExecuteHost + '/v1/sync-entity/all',
+          getRuntimeConfig().backgroundServerHost + '/v1/sync-entity/all',
           {
             method: 'POST',
             headers: {
@@ -4678,7 +4680,7 @@ mergedResume$
           openId,
           entityType,
           user,
-          syncEntityResultCheckUrl
+          getSyncEntityResultCheckUrl()
         );
         syncResumeFeedbackMsg.payload.openId = openId;
         syncResumeFeedbackMsg.payload.tenant = tenantId;

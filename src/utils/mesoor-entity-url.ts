@@ -1,15 +1,18 @@
+import { getRuntimeConfig } from './runtime-config';
+
 export type EntityType = 'Resume' | 'Job';
 
 type EntityRouteMode = 'legacy_query' | 'app_path';
 
 function getEntityRouteModeFromEnv(): EntityRouteMode | null {
-  const raw = import.meta.env.VITE_ENTITY_ROUTE_MODE;
+  const raw = getRuntimeConfig().entityRouteMode;
   if (raw === 'legacy_query' || raw === 'app_path') return raw;
   return null;
 }
 
 function getFrontendHostFromEnv(): string | null {
-  const raw = import.meta.env.VITE_FRONTEND_HOST;
+  const raw =
+    getRuntimeConfig().frontendHost || import.meta.env.VITE_FRONTEND_HOST;
   if (!raw) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;

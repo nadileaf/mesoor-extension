@@ -330,7 +330,9 @@ const cookiesChange$: Observable<Cookies.OnChangedChangeInfoType> =
     onCookieChange.removeListener.bind(onCookieChange)
   ).pipe(share());
 
-export function onCookiesChange$(url: string): Observable<Cookies.Cookie> {
+export function onCookiesChangeInfo$(
+  url: string
+): Observable<Cookies.OnChangedChangeInfoType> {
   const { hostname } = new URL(url);
   // 三层匹配，与 cookies.getAll({ url }) 的返回范围保持一致：
   //   hostname          → host-only cookie（如 inzight.nadileaf.com）
@@ -338,9 +340,12 @@ export function onCookiesChange$(url: string): Observable<Cookies.Cookie> {
   //   getDomain(url)    → 父域 cookie（如 .nadileaf.com，跨产品但 cookies.getAll 也返回）
   const domains = [hostname, `.${hostname}`, getDomain(url)];
   return cookiesChange$.pipe(
-    filter(info => domains.includes(info.cookie.domain)),
-    map(info => info.cookie)
+    filter(info => domains.includes(info.cookie.domain))
   );
+}
+
+export function onCookiesChange$(url: string): Observable<Cookies.Cookie> {
+  return onCookiesChangeInfo$(url).pipe(map(info => info.cookie));
 }
 
 export function getSpecifyDomainCookiesChange(

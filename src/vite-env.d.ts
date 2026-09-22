@@ -4,6 +4,12 @@ interface ImportMetaEnv {
   readonly VITE_WS_SERVER: string;
   readonly VITE_BACKGROUND_SERVER_HOST: string;
   readonly VITE_TOKEN_HOST: string;
+  /** 新前端基址（platform），运行时可用 config.json 的 platformBaseUrl 覆盖 */
+  readonly VITE_PLATFORM_BASE_URL?: string;
+  /** 用户服务代理前缀，默认 /api/user-proxy */
+  readonly VITE_USER_SERVICE_PREFIX?: string;
+  /** 平台 access token cookie 名，默认 platform-access-token */
+  readonly VITE_TOKEN_COOKIE_NAME?: string;
   readonly VITE_SPACE_SERVER: string;
   readonly VITE_ENABLE_SOCKET_CONNECTION?: string;
   readonly VITE_ENABLE_AUTO_SYNC_RESUME?: string;

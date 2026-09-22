@@ -81,3 +81,36 @@ npm run format:check
 #   - 此配置使用 app_path（新前端路由）
 #   - 客户本地部署建议显式配置，不要依赖 host 推断
 # ========================================
+
+## 运行时域名配置（本地/私有部署）
+
+打包产物根目录包含 `config.json`（源文件 `public/config.json`）。部署时**直接修改它即可切换域名，无需重新构建**；留空的字段回退到构建期 `.env.{mode}` 默认值。
+
+```json
+{
+  "platformBaseUrl": "https://platform.nadileaf.com",
+  "userServicePrefix": "/api/user-proxy",
+  "tokenCookieName": "platform-access-token",
+  "wsServer": "wss://web-extension-use.nadileaf.com",
+  "backgroundServerHost": "https://web-extension-use.nadileaf.com",
+  "spaceServer": "https://tip-test.nadileaf.com/api/mesoor-space",
+  "domainHost": "tip-test.nadileaf.com",
+  "frontendHost": "tip-test.nadileaf.com",
+  "actionConfigHost": "web-extension-use.nadileaf.com",
+  "agentHost": "https://agent.nadileaf.com",
+  "updateCdnBaseUrl": "https://cdn-fe.mesoor.com/tip-plugins/mesoor/",
+  "sourcingAgentUrl": "https://agent.nadileaf.com/chat/uo6f9m16c0ymkBTR",
+  "entityRouteMode": "app_path"
+}
+```
+
+读取逻辑见 `src/utils/runtime-config.ts`（`loadRuntimeConfig()` 在 background 启动时 await，`getRuntimeConfig()` 供组件同步读取）。
+
+## 鉴权说明（对齐新前端 platform）
+
+扩展**不主动刷新 token**，只被动读取新前端服务端写入的 cookie：
+
+- `platform-access-token`（HttpOnly，`path=/api/user-proxy`，15 分钟）——新前端每次刷新会话时由服务端重设，扩展用 `chrome.cookies` 读取，解析 JWT 取 `tenantAlias/tenantId/sub`。
+- 兼容旧的 `access_token` / `token` cookie（优先级更低）。
+- cookie 变化（轮换/切租户/登出删除）通过 `chrome.cookies.onChanged` 驱动 `user$`，登出时发出 `null` 断开 WebSocket。
+- 不要再让扩展调用 `/auth/web/token/refresh`：该接口是**严格轮换 + 复用即撤销整个会话**，与网页标签并发刷新会导致全员掉线。

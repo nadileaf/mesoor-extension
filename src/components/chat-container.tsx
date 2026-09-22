@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { writeTokenCookie } from '@/utils/user-utils';
+import { getRuntimeConfig } from '@/utils/runtime-config';
 
 // 引入browser polyfill
 declare global {
@@ -96,7 +97,9 @@ async function createIframe(input: Record<string, any>) {
     ...input, // 直接使用原始input数据
   });
 
-  const agentUrl = import.meta.env.VITE_SOURCING_AGENT_URL;
+  const agentUrl =
+    getRuntimeConfig().sourcingAgentUrl ||
+    import.meta.env.VITE_SOURCING_AGENT_URL;
   const iframeUrl = `${agentUrl}?${params}`;
 
   if (iframeUrl.length > 2048) {
@@ -157,20 +160,37 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           _token = fsgUser?.fsgUser?.token;
           console.log('[storage_token mode] token from storage:', _token);
 
-          if (
-            _token &&
-            import.meta.env.VITE_WRITE_TOKEN_TO_COOKIE === 'true'
-          ) {
-            await writeTokenCookie(_token, browserAPI, import.meta.env.VITE_TOKEN_COOKIE_DOMAIN!);
+          if (_token && import.meta.env.VITE_WRITE_TOKEN_TO_COOKIE === 'true') {
+            await writeTokenCookie(
+              _token,
+              browserAPI,
+              import.meta.env.VITE_TOKEN_COOKIE_DOMAIN!
+            );
           }
         } else {
-          // 从 cookie 读取 token（原有逻辑）
-          const token = await browserAPI?.cookies?.get({
-            url: 'https://tip.mesoor.com',
-            name: 'token',
-          });
+          // 从 cookie 读取 token（优先新前端的 platform-access-token）
+          const cfg = getRuntimeConfig();
+          const prefix = (cfg.userServicePrefix || '').replace(/\/+$/, '');
+          const base = cfg.platformBaseUrl || import.meta.env.VITE_TOKEN_HOST;
+          const queryUrl = `${base}${prefix}/`;
+          const names = [
+            cfg.tokenCookieName || 'platform-access-token',
+            'access_token',
+            'token',
+          ];
+          let found: string | undefined;
+          for (const name of names) {
+            const c = await browserAPI?.cookies?.get({
+              url: queryUrl,
+              name,
+            });
+            if (c?.value) {
+              found = c.value;
+              break;
+            }
+          }
           _token =
-            token?.value ||
+            found ||
             import.meta.env.VITE_LOCAL_TOKEN ||
             'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VybmFtZTrliJjmlY_lqZUiLCJ0ZW5hbnRNZW1iZXIiOiJzaGFuZ2hhaWRlemh1cWl5ZWd1YW5saS0xODhUNTAxMTNiZjYtYjA5YS00M2Y2LWJiZmUtMGRmYjg3ZTNkOTI4IiwidGVuYW50SWQiOjE4OCwiaXNzIjoiZGVmYXVsdCIsInRlbmFudEFsaWFzIjoic2hhbmdoYWlkZXpodXFpeWVndWFubGktMTg4IiwiZXhwIjoxNzYxMTAzMTQyMDg0LCJ1c2VySWQiOiI1MDExM2JmNi1iMDlhLTQzZjYtYmJmZS0wZGZiODdlM2Q5MjgiLCJwcm9qZWN0SWQiOiJkZWZhdWx0IiwiaWF0IjoxNzUzMzI3MTQyMDg0fQ.EFHYDoBFJpwbw8pdMCB-TaZRRCbGFAiW8Qnyl0BPtQs';
           console.log('[cookie mode] token from cookie:', _token);
