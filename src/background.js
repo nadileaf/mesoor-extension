@@ -32,7 +32,11 @@ import { waitForSyncMessage } from './utils/syncReceiveResumeUtil.js';
 // 导入user流
 import { user$ } from './models/user.ts';
 // import { env$ } from "./models/user.ts";
-import { wait$, preferences$, linkedInEmailWait$ } from './models/preference.ts';
+import {
+  wait$,
+  preferences$,
+  linkedInEmailWait$,
+} from './models/preference.ts';
 import { message$ } from './models/stream.ts';
 import { delay } from './utils/index.ts';
 import { findValueByKey } from './utils/json-utils.ts';
@@ -45,10 +49,7 @@ import {
   isSyncHtmlMessage,
 } from './utils/message-fileter.ts';
 import * as qs from 'qs';
-import {
-  loadRuntimeConfig,
-  getRuntimeConfig,
-} from './utils/runtime-config.ts';
+import { loadRuntimeConfig, getRuntimeConfig } from './utils/runtime-config.ts';
 
 // 运行时配置：打包后可通过扩展根目录 config.json 覆盖域名（本地部署免重打包）
 // 注意：MV3 Service Worker 禁止顶层 await，这里只触发加载，读取一律用 getRuntimeConfig()
@@ -65,8 +66,7 @@ const enableAutoSyncResume =
   import.meta.env.VITE_ENABLE_AUTO_SYNC_RESUME === 'true';
 const enableAutoLinkedInEmail =
   import.meta.env.VITE_ENABLE_AUTO_LINKEDIN_EMAIL === 'true';
-const disableResumeSync =
-  import.meta.env.VITE_DISABLE_RESUME_SYNC === 'true';
+const disableResumeSync = import.meta.env.VITE_DISABLE_RESUME_SYNC === 'true';
 const extensionDefaultToken =
   import.meta.env.VITE_EXTENSION_DEFAULT_TOKEN?.trim();
 // 输出环境变量日志
@@ -90,8 +90,7 @@ const tabsObject = {};
 const tabExtraDataByTabId = {};
 // platform-access-token 由新前端服务端在每次刷新时重设，扩展被动读取（优先级最高）
 function tokenCookieNames() {
-  const primary =
-    getRuntimeConfig().tokenCookieName || 'platform-access-token';
+  const primary = getRuntimeConfig().tokenCookieName || 'platform-access-token';
   return [primary, 'access_token', 'token'].filter(
     (name, index, all) => !!name && all.indexOf(name) === index
   );
@@ -143,7 +142,9 @@ browser.runtime.onInstalled.addListener(async detail => {
 
   if (!storage.linkedInEmailWait) {
     // isEmailWait 为 false 是自动弹出邮件框
-    await browser.storage.sync.set({ linkedInEmailWait: { isEmailWait: !enableAutoLinkedInEmail } });
+    await browser.storage.sync.set({
+      linkedInEmailWait: { isEmailWait: !enableAutoLinkedInEmail },
+    });
   }
 
   const resolvedConfig = await runtimeConfigReady;
@@ -169,12 +170,10 @@ wait$.subscribe(waitState => {
 });
 
 let linkedInEmailWait = false;
-linkedInEmailWait$.subscribe(
-  waitState => {
-    linkedInEmailWait = waitState.isEmailWait;
-    console.log('[linkedInEmailWait$] waitState 更新:', waitState);
-  }
-);
+linkedInEmailWait$.subscribe(waitState => {
+  linkedInEmailWait = waitState.isEmailWait;
+  console.log('[linkedInEmailWait$] waitState 更新:', waitState);
+});
 
 // 加载网站拦截规则
 let apiConfig = {
@@ -300,9 +299,19 @@ function createSocket$() {
   console.log('[createSocket$] 创建 socket$ 流');
   return combineLatest([user$, preferences$]).pipe(
     switchMap(([user, preferences]) => {
-      console.log('[socket$] switchMap 触发, user:', user, 'preferences:', preferences);
+      console.log(
+        '[socket$] switchMap 触发, user:',
+        user,
+        'preferences:',
+        preferences
+      );
       if (!user || preferences.disabled) {
-        console.log('[socket$] 条件不满足, user存在:', !!user, 'preferences.disabled:', preferences.disabled);
+        console.log(
+          '[socket$] 条件不满足, user存在:',
+          !!user,
+          'preferences.disabled:',
+          preferences.disabled
+        );
         if (ws) {
           console.log(
             `禁用开关状态改变为${preferences.disabled} 或用户${user}不存在 导致主动断开socket，`
@@ -372,7 +381,9 @@ function initSocketConnection() {
 
   // 添加 user$ 和 preferences$ 的订阅日志
   user$.subscribe(user => console.log('[user$] user 更新:', user));
-  preferences$.subscribe(prefs => console.log('[preferences$] preferences 更新:', prefs));
+  preferences$.subscribe(prefs =>
+    console.log('[preferences$] preferences 更新:', prefs)
+  );
 
   socketSubscription = socket$.subscribe();
   console.log('[initSocketConnection] 已订阅 socket$');
@@ -493,7 +504,7 @@ const needCacheHeadersUrlSubStream = [
   '*://rd6.zhaopin.com/api/im/session/detail*',
   '*://api-h.liepin.com/api/com.liepin.job.h.hjob.get-job-update-info*',
   '*://jianli.58.com/resumedetail/v2/single*',
-    // 猎聘诚猎通-搜索-2026-0528新版
+  // 猎聘诚猎通-搜索-2026-0528新版
   '*://api-h.liepin.com/api/com.liepin.rresume.userh.pc.resume-view',
 
   //意向沟通
@@ -509,7 +520,7 @@ const maimaiResume$ = RequestListen.install([
   '*://maimai.cn/api/ent/talent/basic*',
   // 不知道是啥，直接迁移过来了
   '*://maimai.cn/jobs/jobs_resume*',
-  '*://maimai.cn/sdk/jobs/anti_automation/talent/basic*'
+  '*://maimai.cn/sdk/jobs/anti_automation/talent/basic*',
 ]);
 
 // 拉勾招聘页面中简历管理页面的简历手抓
@@ -522,15 +533,16 @@ const maimaiResume$ = RequestListen.install([
 installDeclarativeNet(apiConfig);
 
 // 初始化脉脉 token manager（从 storage 恢复 key / fingerprint）
-maimaiTokenManager.initialize().catch(e =>
-  console.warn('[MaimaiToken] 初始化失败, 将在首次请求时注册:', e)
-);
+maimaiTokenManager
+  .initialize()
+  .catch(e => console.warn('[MaimaiToken] 初始化失败, 将在首次请求时注册:', e));
 
 // token cookie 查询地址：带上 userServicePrefix，才能命中 path=/api/user-proxy 的 platform-access-token
 function getTokenQueryUrl() {
-  const prefix = (
-    getRuntimeConfig().userServicePrefix || ''
-  ).replace(/\/+$/, '');
+  const prefix = (getRuntimeConfig().userServicePrefix || '').replace(
+    /\/+$/,
+    ''
+  );
   return `${getRuntimeConfig().platformBaseUrl}${prefix}/`;
 }
 
@@ -580,7 +592,9 @@ function connectWebSocket(user) {
   const maxReconnectDelay = 10000; // 最大重连延迟10秒
 
   socket.onopen = () => {
-    console.log(`[connectWebSocket] Connected to WebSocket server ${user.tenantAlias}`);
+    console.log(
+      `[connectWebSocket] Connected to WebSocket server ${user.tenantAlias}`
+    );
     socket._durationTimer = setInterval(() => {
       if (socket && socket._connectTime) {
         const duration = Date.now() - socket._connectTime;
@@ -829,7 +843,9 @@ async function handleWebSocketMessage(message) {
                 });
               } else {
                 const groupId = await browser.tabs.group({ tabIds: tabId });
-                await browser.tabGroups.update(groupId, { title: message.groupName });
+                await browser.tabGroups.update(groupId, {
+                  title: message.groupName,
+                });
               }
             } catch (groupError) {
               console.error('将标签页放入分组失败:', groupError);
@@ -922,9 +938,7 @@ async function handleWebSocketMessage(message) {
       }
       try {
         const groups = await browser.tabGroups.query({});
-        const existingGroup = groups.find(
-          g => g.title === message.groupName
-        );
+        const existingGroup = groups.find(g => g.title === message.groupName);
         if (existingGroup) {
           await browser.tabs.group({
             groupId: existingGroup.id,
@@ -1973,7 +1987,10 @@ async function handleWebSocketMessage(message) {
     case 'ToastAction':
       {
         try {
-          const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+          const tabs = await browser.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
           const activeTab = tabs[0];
           if (activeTab?.id) {
             await browser.tabs.sendMessage(activeTab.id, {
@@ -1981,7 +1998,8 @@ async function handleWebSocketMessage(message) {
               title: message.title,
               message: message.message,
               toastType: message.toastType || 'info',
-              duration: message.duration !== undefined ? message.duration : 4000,
+              duration:
+                message.duration !== undefined ? message.duration : 4000,
             });
             ws.send(
               JSON.stringify({
@@ -2036,7 +2054,9 @@ async function handleWebSocketMessage(message) {
         // 如果该 tabId 已有监听器，先清理旧的
         const existingMonitor = networkMonitors.get(message.tabId);
         if (existingMonitor) {
-          browser.webRequest.onCompleted.removeListener(existingMonitor.listener);
+          browser.webRequest.onCompleted.removeListener(
+            existingMonitor.listener
+          );
           clearTimeout(existingMonitor.timer);
           networkMonitors.delete(message.tabId);
         }
@@ -2051,7 +2071,8 @@ async function handleWebSocketMessage(message) {
             try {
               const regex = new RegExp(cfg.urlPattern);
               if (!regex.test(details.url)) continue;
-              if (cfg.method && details.method !== cfg.method.toUpperCase()) continue;
+              if (cfg.method && details.method !== cfg.method.toUpperCase())
+                continue;
               if (
                 cfg.responseStatusCode !== undefined &&
                 details.statusCode !== cfg.responseStatusCode
@@ -2086,10 +2107,9 @@ async function handleWebSocketMessage(message) {
           }
         };
 
-        browser.webRequest.onCompleted.addListener(
-          listener,
-          { urls: ['<all_urls>'] }
-        );
+        browser.webRequest.onCompleted.addListener(listener, {
+          urls: ['<all_urls>'],
+        });
 
         const timer = setTimeout(() => {
           if (matched) return;
@@ -2124,7 +2144,10 @@ async function handleWebSocketMessage(message) {
             break;
           }
 
-          const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+          const tabs = await browser.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
           const activeTab = tabs[0];
           if (activeTab?.id) {
             await browser.tabs.sendMessage(activeTab.id, {
@@ -2351,8 +2374,13 @@ async function handleScreenShot(message) {
 
 // 处理来自content script或popup的消息
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[onMessage] 收到消息:', request.type, 'from:', sender.tab?.url || sender.id);
-  
+  console.log(
+    '[onMessage] 收到消息:',
+    request.type,
+    'from:',
+    sender.tab?.url || sender.id
+  );
+
   if (request.type === 'pingMesoorExtension') {
     sendResponse({ message: 'pingMesoorExtensionSuccess' });
   }
@@ -2380,7 +2408,11 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 脉脉: MAIN world 从页面 fetch 中捕获到 fp/kid
   if (request.type === 'maimai-page-token') {
     maimaiTokenManager.setPageTokenInfo(request.fp, request.kid);
-    console.log('[MaimaiToken] 从页面 fetch 捕获 fp/kid:', request.fp, request.kid);
+    console.log(
+      '[MaimaiToken] 从页面 fetch 捕获 fp/kid:',
+      request.fp,
+      request.kid
+    );
     sendResponse({ success: true });
     return true;
   }
@@ -2598,10 +2630,10 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const _converted = await fetch(
             import.meta.env.VITE_EFFEX_CONFIGS_URL,
             {
-            headers: {
-              'Content-Type': 'application/json',
-              // 'Authorization': `Bearer ${user.token}`,
-            },
+              headers: {
+                'Content-Type': 'application/json',
+                // 'Authorization': `Bearer ${user.token}`,
+              },
               body: JSON.stringify({
                 config_id: 'standard-convert-LinkedInPC_to_resume-public',
                 data: { data: linkedinResume },
@@ -3005,8 +3037,11 @@ async function proxyFetchViaPage(url, options = {}, tabId) {
       reject(new Error('Proxy fetch timeout'));
     }, 30000);
 
-    const listener = (msg) => {
-      if (msg.type === 'maimai-proxy-fetch-response' && msg.requestId === requestId) {
+    const listener = msg => {
+      if (
+        msg.type === 'maimai-proxy-fetch-response' &&
+        msg.requestId === requestId
+      ) {
         clearTimeout(timeout);
         browser.runtime.onMessage.removeListener(listener);
         pendingProxyReplays.delete(pendingKey);
@@ -3026,19 +3061,21 @@ async function proxyFetchViaPage(url, options = {}, tabId) {
     };
     browser.runtime.onMessage.addListener(listener);
 
-    chrome.tabs.sendMessage(tabId, {
-      type: 'maimai-proxy-fetch',
-      requestId,
-      url,
-      method: options.method || 'GET',
-      headers: headers,
-      body: options.body,
-    }).catch((err) => {
-      clearTimeout(timeout);
-      browser.runtime.onMessage.removeListener(listener);
-      pendingProxyReplays.delete(pendingKey);
-      reject(err);
-    });
+    chrome.tabs
+      .sendMessage(tabId, {
+        type: 'maimai-proxy-fetch',
+        requestId,
+        url,
+        method: options.method || 'GET',
+        headers: headers,
+        body: options.body,
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        browser.runtime.onMessage.removeListener(listener);
+        pendingProxyReplays.delete(pendingKey);
+        reject(err);
+      });
   });
 }
 // 猎聘聊天页附件由页面生成临时签名 tdoss URL。仅缓存参数，
@@ -3125,7 +3162,11 @@ const findLiepinAttachmentPath = value => {
     }
   }
   for (const [key, childValue] of Object.entries(parsedValue)) {
-    if (key === 'param' || key === 'attachmentResume' || typeof childValue === 'object') {
+    if (
+      key === 'param' ||
+      key === 'attachmentResume' ||
+      typeof childValue === 'object'
+    ) {
       const nestedPath = findLiepinAttachmentPath(childValue);
       if (nestedPath) {
         return nestedPath;
@@ -3139,7 +3180,10 @@ const normalizeLiepinAttachmentUrl = attachmentPath => {
   if (!attachmentPath) {
     return null;
   }
-  if (attachmentPath.startsWith('http://') || attachmentPath.startsWith('https://')) {
+  if (
+    attachmentPath.startsWith('http://') ||
+    attachmentPath.startsWith('https://')
+  ) {
     return attachmentPath;
   }
   return `https://tdoss.liepin.com/o/${attachmentPath.replace(/^\/+/, '')}`;
@@ -3152,7 +3196,9 @@ const findLiepinAttachmentParams = value => {
   }
   const results = [];
   if (parsedValue.attachmentResume?.param) {
-    const param = parseLiepinAttachmentValue(parsedValue.attachmentResume.param);
+    const param = parseLiepinAttachmentValue(
+      parsedValue.attachmentResume.param
+    );
     const onlineResumeParam = parseLiepinAttachmentValue(
       parsedValue.onlineResume?.param
     );
@@ -3222,7 +3268,10 @@ const liepinAttachmentToBase64 = async (url, headers) => {
     };
     reader.readAsDataURL(blob);
   });
-  return { fileContentB64, responseHeaders: Object.fromEntries(response.headers.entries()) };
+  return {
+    fileContentB64,
+    responseHeaders: Object.fromEntries(response.headers.entries()),
+  };
 };
 
 const fetchLiepinAttachment = async (params, headers) => {
@@ -3331,7 +3380,10 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     }
     // 脉脉: 用新鲜 ECDSA token 替换缓存中已过期的 header
     // 跳过 register_pubkey，因为 kid 需要从这个请求的响应中提取
-    if (details.url.includes('maimai.cn') && !details.url.includes('register_pubkey')) {
+    if (
+      details.url.includes('maimai.cn') &&
+      !details.url.includes('register_pubkey')
+    ) {
       console.log('[MaimaiToken] 🔍 拦截到请求:', details.url);
       try {
         // 从页面原始 x-ent-token 中解析 fp/kid（和油猴一致，复用页面的指纹和密钥 ID）
@@ -3349,7 +3401,9 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         }
         // kid 未就绪时跳过，等 MAIN world 捕获到 kid 后再拦截后续请求
         if (maimaiTokenManager.hasKid()) {
-          const maimaiHeaders = await maimaiTokenManager.getHeaders(details.tabId);
+          const maimaiHeaders = await maimaiTokenManager.getHeaders(
+            details.tabId
+          );
           headers['x-ent-rid'] = maimaiHeaders['x-ent-rid'];
           headers['x-ent-fp'] = maimaiHeaders['x-ent-fp'];
           headers['x-ent-token'] = maimaiHeaders['x-ent-token'];
@@ -3358,7 +3412,9 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
           console.log('  x-ent-fp:', maimaiHeaders['x-ent-fp']);
           console.log('  x-ent-token:', maimaiHeaders['x-ent-token']);
         } else {
-          console.log('[MaimaiToken] ⏭️ kid 未就绪，跳过注入 (等 MAIN world 捕获)');
+          console.log(
+            '[MaimaiToken] ⏭️ kid 未就绪，跳过注入 (等 MAIN world 捕获)'
+          );
         }
       } catch (e) {
         console.error('[MaimaiToken] 获取token失败:', e);
@@ -3441,7 +3497,11 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         error?.response?.status &&
         [401, 403].includes(error.response.status)
       ) {
-        console.warn('[MaimaiToken] 重放收到', error.response.status, ', 重新注册并重试...');
+        console.warn(
+          '[MaimaiToken] 重放收到',
+          error.response.status,
+          ', 重新注册并重试...'
+        );
         await maimaiTokenManager.reRegister();
         const freshHeaders = await maimaiTokenManager.getHeaders(details.tabId);
         opt.headers['x-ent-rid'] = freshHeaders['x-ent-rid'];
@@ -3456,7 +3516,10 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
           : await request(replayUrl, opt);
       } else if (replayUrl.includes('maimai.cn') && !error?.response?.status) {
         // proxy fetch 错误 (超时/无tab): 降级为直接请求
-        console.warn('[MaimaiToken] proxy fetch 失败, 降级为直接请求:', error.message);
+        console.warn(
+          '[MaimaiToken] proxy fetch 失败, 降级为直接请求:',
+          error.message
+        );
         _replayResponse = await request(replayUrl, opt);
       } else {
         throw error;
@@ -3483,7 +3546,11 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     if (error?.response?.status && [401, 403].includes(error.response.status)) {
       const url = error.config?.url || '';
       if (url.includes('maimai.cn')) {
-        console.warn('[MaimaiToken] 收到', error.response.status, ', 尝试重新注册...');
+        console.warn(
+          '[MaimaiToken] 收到',
+          error.response.status,
+          ', 尝试重新注册...'
+        );
         try {
           await maimaiTokenManager.reRegister();
         } catch (regErr) {
@@ -3500,7 +3567,9 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
 // 脉脉请求重放流 - 使用缓存的请求头（x-csrf-token, x-ent-token）
 const maimaiResumeReplay$ = resumeSendHeadersV2Base$.pipe(
   filter(({ details }) => {
-    return details.url.includes('maimai.cn/sdk/jobs/anti_automation/talent/basic');
+    return details.url.includes(
+      'maimai.cn/sdk/jobs/anti_automation/talent/basic'
+    );
   }),
   map(response => {
     const { details, replayResponse, headers } = response;
@@ -3509,7 +3578,7 @@ const maimaiResumeReplay$ = resumeSendHeadersV2Base$.pipe(
   mergeMap(async ({ details, replayResponse, headers }) => {
     let fileContentB64 = null;
     let fileRespHeaders = null;
-    
+
     // 如果有简历附件URL，下载附件
     if (replayResponse?.data?.resume?.file_url) {
       try {
@@ -3536,7 +3605,7 @@ const maimaiResumeReplay$ = resumeSendHeadersV2Base$.pipe(
         console.error('下载脉脉简历附件失败:', error);
       }
     }
-    
+
     const body = {
       jsonBody: replayResponse,
       url: details.url,
@@ -3585,8 +3654,12 @@ const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
     let jobCompetitiveParams = {};
     try {
       if (replayResponse?.zpData?.jobCompetitive?.url) {
-        const jobCompetitiveUrl = new URL(replayResponse.zpData.jobCompetitive.url);
-        jobCompetitiveParams = Object.fromEntries(jobCompetitiveUrl.searchParams.entries());
+        const jobCompetitiveUrl = new URL(
+          replayResponse.zpData.jobCompetitive.url
+        );
+        jobCompetitiveParams = Object.fromEntries(
+          jobCompetitiveUrl.searchParams.entries()
+        );
         console.log('提取到 jobCompetitive URL 参数:', jobCompetitiveParams);
       }
     } catch (e) {
@@ -4040,7 +4113,9 @@ const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
 );
 // 聊天历史已经包含附件快照参数，不需要用户点击附件。
 const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) => details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list')),
+  filter(({ details }) =>
+    details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list')
+  ),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const paramsList = findLiepinAttachmentParams(replayResponse);
     const cacheableParams = paramsList.filter(
@@ -4114,10 +4189,13 @@ const liepinChatResume$ = resumeSendHeadersV2Base$.pipe(
         }
       }
       const attachmentResume =
-        replayResponse?.data?.attachmentResume ?? replayResponse?.attachmentResume;
+        replayResponse?.data?.attachmentResume ??
+        replayResponse?.attachmentResume;
       const attachmentPath =
         findLiepinAttachmentPath(attachmentResume) ||
-        findLiepinAttachmentPath(replayResponse?.data?.bizData?.attachmentResume);
+        findLiepinAttachmentPath(
+          replayResponse?.data?.bizData?.attachmentResume
+        );
       const attachmentUrl = normalizeLiepinAttachmentUrl(attachmentPath);
 
       if (attachmentUrl && fileContentB64.length === 0) {
@@ -4154,7 +4232,11 @@ const liepinChatResume$ = resumeSendHeadersV2Base$.pipe(
       return {
         details,
         headers,
-        body: { jsonBody: replayResponse, url: details.url, fileContentB64: [] },
+        body: {
+          jsonBody: replayResponse,
+          url: details.url,
+          fileContentB64: [],
+        },
       };
     }
   }),
@@ -4653,7 +4735,10 @@ mergedResume$
         // 如果服务器返回 pass: true，表示跳过此次同步（如非主实体）
         // 静默处理：不发任何反馈，前端不提示
         if (syncEntityResponseData.pass === true) {
-          console.log('服务器返回 pass=true，跳过同步:', syncEntityResponseData.msg);
+          console.log(
+            '服务器返回 pass=true，跳过同步:',
+            syncEntityResponseData.msg
+          );
           shouldSendFeedback = false;
           return;
         }

@@ -48,7 +48,9 @@ function base64UrlDecode(b64u: string): string {
 }
 
 /** 解析脉脉 token (2-part: payload.sig 或 3-part: header.payload.sig), 不验签 */
-export function parseMaimaiToken(token: string): { fp: string; kid: string } | null {
+export function parseMaimaiToken(
+  token: string
+): { fp: string; kid: string } | null {
   try {
     if (!token || typeof token !== 'string') return null;
     const parts = token.split('.');
@@ -60,14 +62,16 @@ export function parseMaimaiToken(token: string): { fp: string; kid: string } | n
       return { fp: json.fp as string, kid: json.kid as string };
     }
     return null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function sha256Hex(message: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ====== 指纹计算 ======
@@ -101,7 +105,9 @@ function buildFingerprintRaw(parts: FingerprintParts): string {
 }
 
 /** 计算 SHA-256 指纹 (content script 提供的完整数据) */
-export async function computeFingerprint(parts: FingerprintParts): Promise<string> {
+export async function computeFingerprint(
+  parts: FingerprintParts
+): Promise<string> {
   const raw = buildFingerprintRaw(parts);
   const full = await sha256Hex(raw);
   return full.slice(0, 32);
@@ -140,7 +146,10 @@ export class MaimaiTokenManager {
 
   /** 设置页面 x-ent-token 中提取的 fp/kid */
   setPageTokenInfo(fp: string | null, kid: string | null): void {
-    if (fp) { this.pageFingerprint = fp; console.log('[MaimaiToken] 从页面 token 获取 fp:', fp); }
+    if (fp) {
+      this.pageFingerprint = fp;
+      console.log('[MaimaiToken] 从页面 token 获取 fp:', fp);
+    }
     if (kid) {
       this.pageKid = kid;
       this.kid = kid;
@@ -199,7 +208,7 @@ export class MaimaiTokenManager {
     this.kid = kid;
     console.log('[MaimaiToken] kid 已设置:', kid);
     await chrome.storage.session.set({
-      maimai_key_info: { kid }
+      maimai_key_info: { kid },
     });
   }
 
@@ -215,7 +224,9 @@ export class MaimaiTokenManager {
     if (tabId != null) {
       try {
         await chrome.tabs.sendMessage(tabId, { type: 'maimai-request-kid' });
-      } catch (_) { /* content script 可能尚未加载 */ }
+      } catch (_) {
+        /* content script 可能尚未加载 */
+      }
     }
     // 等待页面注入 (最多等 20 秒，给 document_idle 足够时间)
     for (let i = 0; i < 200; i++) {
@@ -224,7 +235,9 @@ export class MaimaiTokenManager {
       if (tabId != null && i > 0 && i % 20 === 0) {
         try {
           await chrome.tabs.sendMessage(tabId, { type: 'maimai-request-kid' });
-        } catch (_) { /* content script 可能尚未加载 */ }
+        } catch (_) {
+          /* content script 可能尚未加载 */
+        }
       }
       await new Promise(r => setTimeout(r, 100));
     }
@@ -248,7 +261,10 @@ export class MaimaiTokenManager {
       }, 10000);
 
       const listener = (msg: any) => {
-        if (msg.type === 'maimai-sign-response' && msg.requestId === requestId) {
+        if (
+          msg.type === 'maimai-sign-response' &&
+          msg.requestId === requestId
+        ) {
           clearTimeout(timeout);
           chrome.runtime.onMessage.removeListener(listener);
           if (msg.error) {
@@ -260,15 +276,17 @@ export class MaimaiTokenManager {
       };
       chrome.runtime.onMessage.addListener(listener);
 
-      chrome.tabs.sendMessage(tabId, {
-      type: 'maimai-sign-data',
-      requestId,
-      data,
-      }).catch((err) => {
-      clearTimeout(timeout);
-      chrome.runtime.onMessage.removeListener(listener);
-      reject(err);
-      });
+      chrome.tabs
+        .sendMessage(tabId, {
+          type: 'maimai-sign-data',
+          requestId,
+          data,
+        })
+        .catch(err => {
+          clearTimeout(timeout);
+          chrome.runtime.onMessage.removeListener(listener);
+          reject(err);
+        });
     });
   }
 
@@ -281,7 +299,7 @@ export class MaimaiTokenManager {
     await this.ensureRegistered(tabId);
 
     // 优先使用页面 token 中解析出的 fp/kid（和油猴一致），其次用 content script 计算的指纹
-    const fp = this.pageFingerprint || await this.getFingerprint();
+    const fp = this.pageFingerprint || (await this.getFingerprint());
     const kid = this.kid; // kid 优先来自页面 token (setPageTokenInfo 已同步设置)
     const rid = crypto.randomUUID();
     const now = Date.now();
@@ -304,7 +322,10 @@ export class MaimaiTokenManager {
 
     // 委托页面用私钥签名
     const sigRaw = await this.signViaPage(signingInput, tabId);
-    const sigB64Url = sigRaw.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    const sigB64Url = sigRaw
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
     const token = `${payloadB64}.${sigB64Url}`;
 
     console.log('[MaimaiToken] token payload:', payloadJson);

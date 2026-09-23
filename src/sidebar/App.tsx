@@ -26,9 +26,7 @@ function App() {
         ) : (
           <SettingsContainer
             onNavigateToSourcing={
-              enableSourcingChat
-                ? () => setActiveTab('Sourcing')
-                : undefined
+              enableSourcingChat ? () => setActiveTab('Sourcing') : undefined
             }
           />
         )}

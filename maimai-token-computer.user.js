@@ -33,7 +33,11 @@
   // ========== Hook crypto.subtle.sign 捕获签名用的私钥 ==========
   const origSign = crypto.subtle.sign.bind(crypto.subtle);
   crypto.subtle.sign = async function (algorithm, key, data) {
-    if (algorithm.name === 'ECDSA' && algorithm.hash === 'SHA-256' && key.type === 'private') {
+    if (
+      algorithm.name === 'ECDSA' &&
+      algorithm.hash === 'SHA-256' &&
+      key.type === 'private'
+    ) {
       console.log('[油猴] 🔏 sign 调用, 私钥:', key);
       capturedKeyPair = { ...capturedKeyPair, privateKey: key };
     }
@@ -44,7 +48,11 @@
 
   // ========== Hook crypto.subtle.generateKey 捕获 ECDSA 密钥对 ==========
   const origGenerateKey = crypto.subtle.generateKey.bind(crypto.subtle);
-  crypto.subtle.generateKey = async function (algorithm, extractable, keyUsages) {
+  crypto.subtle.generateKey = async function (
+    algorithm,
+    extractable,
+    keyUsages
+  ) {
     const keyPair = await origGenerateKey(algorithm, extractable, keyUsages);
     if (algorithm.name === 'ECDSA' && algorithm.namedCurve === 'P-256') {
       // sign hook 会覆盖 privateKey, 这里主要拿 publicKey
@@ -58,14 +66,18 @@
   // ========== Hook fetch (自动注入 + 数据捕获) ==========
   const origFetch = window.fetch.bind(window);
   window.fetch = async function (...args) {
-    const request = args[0] instanceof Request ? args[0] : { url: String(args[0] || '') };
+    const request =
+      args[0] instanceof Request ? args[0] : { url: String(args[0] || '') };
     const url = request.url || String(args[0] || '');
     let options = args[1] ? Object.assign({}, args[1]) : {};
 
     // 捕获 register_pubkey 请求体
     if (url.includes('register_pubkey') && options.body) {
       try {
-        registerPubkeyBody = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        registerPubkeyBody =
+          typeof options.body === 'string'
+            ? options.body
+            : JSON.stringify(options.body);
         console.log('[油猴] register_pubkey 请求体:', registerPubkeyBody);
       } catch (e) {}
     }
@@ -74,26 +86,58 @@
     let replayInfo = null;
     if (shouldIntercept(url) && capturedKeyPair && capturedKid) {
       try {
-        const method = args[0] instanceof Request ? args[0].method : (options.method || 'GET');
-        const body = args[0] instanceof Request
-          ? (method === 'GET' || method === 'HEAD' ? undefined : await args[0].clone().text())
-          : (options.body || undefined);
+        const method =
+          args[0] instanceof Request ? args[0].method : options.method || 'GET';
+        const body =
+          args[0] instanceof Request
+            ? method === 'GET' || method === 'HEAD'
+              ? undefined
+              : await args[0].clone().text()
+            : options.body || undefined;
         let originalHeaders = {};
         if (args[0] instanceof Request) {
           originalHeaders = headersToPlain(args[0].headers);
         } else if (options.headers) {
           originalHeaders = headersToPlain(options.headers);
         }
-        console.log('[油猴] 📋 originalHeaders keys:', Object.keys(originalHeaders));
-        console.log('[油猴] 📋 originalHeaders x-ent-token 前80字:', (originalHeaders['x-ent-token'] || originalHeaders['X-Ent-Token'] || '无').substring(0, 80));
+        console.log(
+          '[油猴] 📋 originalHeaders keys:',
+          Object.keys(originalHeaders)
+        );
+        console.log(
+          '[油猴] 📋 originalHeaders x-ent-token 前80字:',
+          (
+            originalHeaders['x-ent-token'] ||
+            originalHeaders['X-Ent-Token'] ||
+            '无'
+          ).substring(0, 80)
+        );
         // 尝试多种 key 名
-        const pageToken = originalHeaders['x-ent-token'] || originalHeaders['X-Ent-Token'] ||
-                          originalHeaders['x-ent-token'] || originalHeaders['X-ENT-TOKEN'] || '';
+        const pageToken =
+          originalHeaders['x-ent-token'] ||
+          originalHeaders['X-Ent-Token'] ||
+          originalHeaders['x-ent-token'] ||
+          originalHeaders['X-ENT-TOKEN'] ||
+          '';
         const pageJWT = parseJWTPayload(pageToken);
         const pageFingerprint = pageJWT ? pageJWT.fp : null;
         const pageKid = pageJWT ? pageJWT.kid : null;
-        console.log('[油猴] 📋 解析页面JWT:', pageJWT ? '✅' : '❌失败', 'fp:', pageFingerprint, 'kid:', pageKid);
-        replayInfo = { url, method, body, originalHeaders, pageFingerprint, pageKid };
+        console.log(
+          '[油猴] 📋 解析页面JWT:',
+          pageJWT ? '✅' : '❌失败',
+          'fp:',
+          pageFingerprint,
+          'kid:',
+          pageKid
+        );
+        replayInfo = {
+          url,
+          method,
+          body,
+          originalHeaders,
+          pageFingerprint,
+          pageKid,
+        };
       } catch (e) {
         console.warn('[油猴] 保存请求信息失败:', e.message);
       }
@@ -105,10 +149,17 @@
     if (replayInfo && capturedKeyPair && capturedKid) {
       try {
         // 用页面指纹+页面kid（不是自己捕获的）来签名
-        const headers = await computeTokenHeaders(replayInfo.pageFingerprint, replayInfo.pageKid);
+        const headers = await computeTokenHeaders(
+          replayInfo.pageFingerprint,
+          replayInfo.pageKid
+        );
 
         // 合并原始 headers + 计算的新 header（不覆盖 csrf-token 等）
-        const mergedHeaders = Object.assign({}, replayInfo.originalHeaders, headers);
+        const mergedHeaders = Object.assign(
+          {},
+          replayInfo.originalHeaders,
+          headers
+        );
 
         const replayOptions = {
           method: replayInfo.method,
@@ -116,10 +167,20 @@
           body: replayInfo.body,
         };
 
-        console.log('%c[油猴] 📤 页面原始请求已发送，', 'color: gray', replayInfo.url.substring(0, 80));
-        console.log('%c[油猴] 🔄 正在用页面指纹重放对比...', 'color: orange; font-weight: bold');
+        console.log(
+          '%c[油猴] 📤 页面原始请求已发送，',
+          'color: gray',
+          replayInfo.url.substring(0, 80)
+        );
+        console.log(
+          '%c[油猴] 🔄 正在用页面指纹重放对比...',
+          'color: orange; font-weight: bold'
+        );
         console.log('  页面 x-ent-fp:', replayInfo.pageFingerprint);
-        console.log('  原始 x-csrf-token:', replayInfo.originalHeaders['x-csrf-token'] || '无');
+        console.log(
+          '  原始 x-csrf-token:',
+          replayInfo.originalHeaders['x-csrf-token'] || '无'
+        );
         console.log('  替换 headers:', JSON.stringify(headers, null, 2));
 
         const replayResponse = await origFetch(replayInfo.url, replayOptions);
@@ -130,7 +191,9 @@
         console.log('  页面请求状态:', response.status);
         console.log('  计算请求状态:', replayResponse.status);
         if (replayResponse.status === 204) {
-          const csrfFromResp = replayResponse.headers.get('X-CSRF-Token') || replayResponse.headers.get('x-csrf-token');
+          const csrfFromResp =
+            replayResponse.headers.get('X-CSRF-Token') ||
+            replayResponse.headers.get('x-csrf-token');
           console.log('  ⚠️ 204 响应, X-CSRF-Token:', csrfFromResp);
         }
         console.log('  计算请求 body (前500字):', replayText.substring(0, 500));
@@ -151,8 +214,13 @@
             capturedKid = data.kid;
             capturedExpire = data.expire;
             capturedServerTime = data.server_time;
-            console.log('%c[油猴] ✅ kid:', 'color: green', data.kid,
-              'expire:', new Date(data.expire).toLocaleString());
+            console.log(
+              '%c[油猴] ✅ kid:',
+              'color: green',
+              data.kid,
+              'expire:',
+              new Date(data.expire).toLocaleString()
+            );
           }
         }
       }
@@ -190,9 +258,12 @@
         ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
         ctx.fillText('mm-entoken-v1 🤖', 4, 35);
         const dataUrl = canvas.toDataURL();
-        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(dataUrl));
+        const hashBuffer = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(dataUrl)
+        );
         canvasHash = Array.from(new Uint8Array(hashBuffer))
-          .map((b) => b.toString(16).padStart(2, '0'))
+          .map(b => b.toString(16).padStart(2, '0'))
           .join('')
           .slice(0, 32);
       }
@@ -204,12 +275,19 @@
       const gl = document.createElement('canvas').getContext('webgl');
       if (gl) {
         const dbgRenderInfo = gl.getExtension('WEBGL_debug_renderer_info');
-        const vendor = dbgRenderInfo ? gl.getParameter(dbgRenderInfo.UNMASKED_VENDOR_WEBGL) : '';
-        const renderer = dbgRenderInfo ? gl.getParameter(dbgRenderInfo.UNMASKED_RENDERER_WEBGL) : '';
+        const vendor = dbgRenderInfo
+          ? gl.getParameter(dbgRenderInfo.UNMASKED_VENDOR_WEBGL)
+          : '';
+        const renderer = dbgRenderInfo
+          ? gl.getParameter(dbgRenderInfo.UNMASKED_RENDERER_WEBGL)
+          : '';
         const raw = `${vendor}~${renderer}`;
-        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+        const hashBuffer = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(raw)
+        );
         webglHash = Array.from(new Uint8Array(hashBuffer))
-          .map((b) => b.toString(16).padStart(2, '0'))
+          .map(b => b.toString(16).padStart(2, '0'))
           .join('')
           .slice(0, 32);
       }
@@ -217,30 +295,56 @@
 
     // 拼装原始指纹字符串
     const raw = [
-      'mm-entoken-v1', ua, screenInfo, colorDepth, timezone,
-      cores, memory, touch, canvasHash, webglHash,
+      'mm-entoken-v1',
+      ua,
+      screenInfo,
+      colorDepth,
+      timezone,
+      cores,
+      memory,
+      touch,
+      canvasHash,
+      webglHash,
     ].join('|');
     console.log('[油猴] 指纹原始:', raw);
 
-    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    const hashBuffer = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(raw)
+    );
     const fingerprint = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
+      .map(b => b.toString(16).padStart(2, '0'))
       .join('')
       .slice(0, 32);
 
-    console.log('[油猴] ✅ 指纹:', fingerprint, '(canvas:', canvasHash, 'webgl:', webglHash, ')');
+    console.log(
+      '[油猴] ✅ 指纹:',
+      fingerprint,
+      '(canvas:',
+      canvasHash,
+      'webgl:',
+      webglHash,
+      ')'
+    );
     return fingerprint;
   }
 
   // ========== 工具函数 ==========
   function base64UrlEncode(str) {
-    return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    return btoa(str)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
   }
 
   function uint8ToBase64Url(bytes) {
     let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    for (let i = 0; i < bytes.length; i++)
+      binary += String.fromCharCode(bytes[i]);
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
   }
 
   /** 解析 JWT payload (不验签) */
@@ -262,7 +366,12 @@
       console.warn('[油猴] JWT 分段数不对:', parts.length, '(期望2或3)');
       return null;
     } catch (e) {
-      console.warn('[油猴] parseJWTPayload 异常:', e.message, 'token长度:', token?.length);
+      console.warn(
+        '[油猴] parseJWTPayload 异常:',
+        e.message,
+        'token长度:',
+        token?.length
+      );
       return null;
     }
   }
@@ -272,7 +381,9 @@
     const result = {};
     if (!headersObj) return result;
     if (headersObj instanceof Headers) {
-      headersObj.forEach((v, k) => { result[k] = v; });
+      headersObj.forEach((v, k) => {
+        result[k] = v;
+      });
     } else if (typeof headersObj === 'object') {
       Object.assign(result, headersObj);
     }
@@ -282,7 +393,8 @@
   // ========== Token 计算 (2部分格式, 签 base64url(payload) 字符串字节) ==========
   async function computeTokenHeaders(pageFingerprint, pageKid) {
     if (!capturedKeyPair) throw new Error('未捕获密钥对');
-    const fp = pageFingerprint || computedFingerprint || await computeFingerprint();
+    const fp =
+      pageFingerprint || computedFingerprint || (await computeFingerprint());
     const kid = pageKid || capturedKid;
     if (!kid) throw new Error('未获取 kid');
 
@@ -295,7 +407,7 @@
     // 流程: G=base64url → l=G(JSON_bytes) → sign(encode(l)) → d=G(sig) → token=l.d
     const payloadJson = JSON.stringify(payload);
     const payloadB64 = base64UrlEncode(payloadJson);
-    const lBytes = new TextEncoder().encode(payloadB64);  // 签 base64url 字符串, 不是 JSON!
+    const lBytes = new TextEncoder().encode(payloadB64); // 签 base64url 字符串, 不是 JSON!
 
     const sig = await crypto.subtle.sign(
       { name: 'ECDSA', hash: 'SHA-256' },
@@ -317,7 +429,14 @@
       console.log('  privateKey:', capturedKeyPair.privateKey);
     }
     console.log('kid:', capturedKid || '❌ 未捕获');
-    if (capturedExpire) console.log('expire:', capturedExpire, '(', new Date(capturedExpire).toLocaleString(), ')');
+    if (capturedExpire)
+      console.log(
+        'expire:',
+        capturedExpire,
+        '(',
+        new Date(capturedExpire).toLocaleString(),
+        ')'
+      );
     if (capturedServerTime) console.log('server_time:', capturedServerTime);
     console.log('指纹:', computedFingerprint || '❌ 未计算');
     if (registerPubkeyBody) console.log('注册请求体:', registerPubkeyBody);
@@ -325,13 +444,23 @@
 
   window.__maimaiComputeToken = async function () {
     try {
-      if (!capturedKeyPair) { console.error('[油猴] ❌ 未捕获密钥对'); return null; }
-      if (!capturedKid) { console.error('[油猴] ❌ 未捕获 kid'); return null; }
+      if (!capturedKeyPair) {
+        console.error('[油猴] ❌ 未捕获密钥对');
+        return null;
+      }
+      if (!capturedKid) {
+        console.error('[油猴] ❌ 未捕获 kid');
+        return null;
+      }
 
       console.log('%c=== 手动计算 Token ===', 'color: yellow; font-size: 14px');
       // 手动计算时用自己的指纹和捕获的 kid
-      if (!computedFingerprint) computedFingerprint = await computeFingerprint();
-      const headers = await computeTokenHeaders(computedFingerprint, capturedKid);
+      if (!computedFingerprint)
+        computedFingerprint = await computeFingerprint();
+      const headers = await computeTokenHeaders(
+        computedFingerprint,
+        capturedKid
+      );
 
       console.log('%c✅ 结果 (自算指纹):', 'color: green; font-size: 16px');
       console.log('x-ent-rid:', headers['x-ent-rid']);
@@ -348,8 +477,12 @@
 
   // 页面加载后自动计算指纹
   document.addEventListener('DOMContentLoaded', async () => {
-    try { computedFingerprint = await computeFingerprint(); } catch (e) {}
-    console.log('[油猴] 就绪! 输入 __maimaiStatus() 查看状态, __maimaiComputeToken() 手动计算');
+    try {
+      computedFingerprint = await computeFingerprint();
+    } catch (e) {}
+    console.log(
+      '[油猴] 就绪! 输入 __maimaiStatus() 查看状态, __maimaiComputeToken() 手动计算'
+    );
     console.log('[油猴] 自动拦截: ' + INTERCEPT_PATTERNS.join(', '));
   });
 })();

@@ -51,7 +51,9 @@ export default defineConfig(({ mode }) => {
             const newRaw = JSON.stringify(manifest, null, 2);
             if (newRaw !== raw) {
               fs.writeFileSync(manifestPath, newRaw);
-              console.log('[fix-main-world-loader] ✅ manifest.json 已修复 MAIN world 引用');
+              console.log(
+                '[fix-main-world-loader] ✅ manifest.json 已修复 MAIN world 引用'
+              );
             }
           }
         };
@@ -62,9 +64,13 @@ export default defineConfig(({ mode }) => {
             setTimeout(applyFix, 2000);
             const distDir = path.resolve(__dirname, 'dist');
             if (fs.existsSync(distDir)) {
-              const watcher = fs.watch(distDir, { recursive: true }, (_event, filename) => {
-                if (filename === 'manifest.json') setTimeout(applyFix, 300);
-              });
+              const watcher = fs.watch(
+                distDir,
+                { recursive: true },
+                (_event, filename) => {
+                  if (filename === 'manifest.json') setTimeout(applyFix, 300);
+                }
+              );
               server.httpServer?.once('close', () => watcher.close());
             }
           },

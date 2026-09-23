@@ -263,7 +263,11 @@ const SettingsContainer: React.FC<{ onNavigateToSourcing?: () => void }> = ({
       });
 
       if (import.meta.env.VITE_WRITE_TOKEN_TO_COOKIE === 'true') {
-        await writeTokenCookie(token, (window as any).browser, import.meta.env.VITE_TOKEN_COOKIE_DOMAIN!);
+        await writeTokenCookie(
+          token,
+          (window as any).browser,
+          import.meta.env.VITE_TOKEN_COOKIE_DOMAIN!
+        );
       }
 
       setCurrentUser(fsgUser);
@@ -271,7 +275,9 @@ const SettingsContainer: React.FC<{ onNavigateToSourcing?: () => void }> = ({
       console.log('用户创建成功');
     } catch (error) {
       console.error('创建用户失败，详细错误:', error);
-      setCreateError(`创建用户失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setCreateError(
+        `创建用户失败: ${error instanceof Error ? error.message : '未知错误'}`
+      );
     } finally {
       setIsCreatingUser(false);
     }
@@ -572,64 +578,64 @@ const SettingsContainer: React.FC<{ onNavigateToSourcing?: () => void }> = ({
 
         {/* 简历同步设置 */}
         {import.meta.env.VITE_HIDE_RESUME_SYNC !== 'true' && (
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center">
-              <span className="mr-2">📄</span>
-              简历同步设置
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* 自动同步开关 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-base font-medium text-foreground">
-                  浏览简历自动入库
+          <Card className="gap-4">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <span className="mr-2">📄</span>
+                简历同步设置
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 自动同步开关 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-base font-medium text-foreground">
+                    浏览简历自动入库
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    自动将浏览的简历同步到人才库中
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  自动将浏览的简历同步到人才库中
-                </div>
+                <Switch
+                  checked={settings.autoSync}
+                  onCheckedChange={() => handleToggle('autoSync')}
+                />
               </div>
-              <Switch
-                checked={settings.autoSync}
-                onCheckedChange={() => handleToggle('autoSync')}
-              />
-            </div>
 
-            {/* 后端通信开关 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-base font-medium text-foreground">
-                  后端通信
+              {/* 后端通信开关 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-base font-medium text-foreground">
+                    后端通信
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    启用与后端服务器的数据通信功能
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  启用与后端服务器的数据通信功能
-                </div>
+                <Switch
+                  checked={settings.enableSocketConnection}
+                  onCheckedChange={() => handleToggle('enableSocketConnection')}
+                />
               </div>
-              <Switch
-                checked={settings.enableSocketConnection}
-                onCheckedChange={() => handleToggle('enableSocketConnection')}
-              />
-            </div>
 
-            {/* 领英邮件自动生成开关 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-base font-medium text-foreground">
-                  领英邮件自动生成
+              {/* 领英邮件自动生成开关 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-base font-medium text-foreground">
+                    领英邮件自动生成
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    在 LinkedIn Recruiter 页面点击给候选人发消息时自动生成邮件
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  在 LinkedIn Recruiter 页面点击给候选人发消息时自动生成邮件
-                </div>
+                <Switch
+                  checked={settings.autoLinkedInEmail}
+                  onCheckedChange={() => handleToggle('autoLinkedInEmail')}
+                />
               </div>
-              <Switch
-                checked={settings.autoLinkedInEmail}
-                onCheckedChange={() => handleToggle('autoLinkedInEmail')}
-              />
-            </div>
 
-            {/* 确认提示开关 */}
-            {/* <div className="flex items-center justify-between">
+              {/* 确认提示开关 */}
+              {/* <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium text-foreground">同步前确认提示</div>
                 <div className="text-sm text-muted-foreground">
@@ -641,64 +647,66 @@ const SettingsContainer: React.FC<{ onNavigateToSourcing?: () => void }> = ({
                 onCheckedChange={() => handleToggle("showPrompt")}
               />
             </div> */}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
         )}
 
         {/* 版本信息 */}
         {import.meta.env.VITE_HIDE_VERSION_INFO !== 'true' && (
-        <Card className="gap-4">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center">
-              <span className="mr-2">📱</span>
-              版本信息
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground">当前版本</span>
-              <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded">
-                v{getManifestVersion()}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-sm text-foreground">版本状态</span>
-                <span className={`text-sm ${getVersionStatusColor()}`}>
-                  {getVersionStatusText()}
+          <Card className="gap-4">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <span className="mr-2">📱</span>
+                版本信息
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">当前版本</span>
+                <span className="font-mono text-primary bg-primary/10 px-2 py-1 rounded">
+                  v{getManifestVersion()}
                 </span>
               </div>
-              <Button
-                onClick={handleVersionAction}
-                size="sm"
-                disabled={isCheckingUpdate}
-                variant={updateStatus === 'outdated' ? 'default' : 'outline'}
-              >
-                {getVersionCheckButtonText()}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-sm text-foreground">版本状态</span>
+                  <span className={`text-sm ${getVersionStatusColor()}`}>
+                    {getVersionStatusText()}
+                  </span>
+                </div>
+                <Button
+                  onClick={handleVersionAction}
+                  size="sm"
+                  disabled={isCheckingUpdate}
+                  variant={updateStatus === 'outdated' ? 'default' : 'outline'}
+                >
+                  {getVersionCheckButtonText()}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* 帮助信息 */}
         {import.meta.env.VITE_HIDE_USAGE_TIPS !== 'true' && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="">
-            <div className="flex items-start">
-              <span className="text-primary mr-2">💡</span>
-              <div className="text-sm">
-                <div className="font-medium mb-2 text-foreground">使用提示</div>
-                <ul className="space-y-1 text-muted-foreground">
-                  <li>• 启用自动同步后，浏览简历时将自动触发同步</li>
-                  <li>• 如遇问题，请检查是否已登录 tip.mesoor.com</li>
-                  <li>• 定期检查更新以获取最新功能和安全修复</li>
-                </ul>
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="">
+              <div className="flex items-start">
+                <span className="text-primary mr-2">💡</span>
+                <div className="text-sm">
+                  <div className="font-medium mb-2 text-foreground">
+                    使用提示
+                  </div>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>• 启用自动同步后，浏览简历时将自动触发同步</li>
+                    <li>• 如遇问题，请检查是否已登录 tip.mesoor.com</li>
+                    <li>• 定期检查更新以获取最新功能和安全修复</li>
+                  </ul>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
         )}
       </div>
 

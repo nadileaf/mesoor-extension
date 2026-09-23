@@ -1,7 +1,9 @@
 // 脉脉: document_start + world=MAIN, 在页面脚本之前直接执行
 // 无需注入，本身就运行在 MAIN world
 
-console.log('[MaimaiHook] MAIN world hook 开始安装 (document_start, world=MAIN)');
+console.log(
+  '[MaimaiHook] MAIN world hook 开始安装 (document_start, world=MAIN)'
+);
 
 // ========== 反监控：禁用 voyager 上报（阻止 extension_watch 等所有埋点） ==========
 // 暂时注释掉，方便调试
@@ -25,8 +27,16 @@ let capturedKid: string | null = null;
 
 // ========== Hook crypto.subtle.sign: 捕获页面实际签名用的私钥 ==========
 // 页面可能生成多个 ECDSA P-256 密钥对，sign hook 捕获真正用于签 API 请求的那个
-crypto.subtle.sign = async (algorithm: any, key: CryptoKey, data: BufferSource): Promise<ArrayBuffer> => {
-  if (algorithm?.name === 'ECDSA' && algorithm?.hash === 'SHA-256' && key?.type === 'private') {
+crypto.subtle.sign = async (
+  algorithm: any,
+  key: CryptoKey,
+  data: BufferSource
+): Promise<ArrayBuffer> => {
+  if (
+    algorithm?.name === 'ECDSA' &&
+    algorithm?.hash === 'SHA-256' &&
+    key?.type === 'private'
+  ) {
     if (capturedKeyPair) {
       capturedKeyPair = { ...capturedKeyPair, privateKey: key };
     }
@@ -36,7 +46,11 @@ crypto.subtle.sign = async (algorithm: any, key: CryptoKey, data: BufferSource):
 };
 console.log('[MaimaiHook] sign hook 已安装');
 
-crypto.subtle.generateKey = async (algorithm: any, extractable: boolean, keyUsages: any): Promise<any> => {
+crypto.subtle.generateKey = async (
+  algorithm: any,
+  extractable: boolean,
+  keyUsages: any
+): Promise<any> => {
   const result = await origGenerateKey(algorithm, extractable, keyUsages);
   if (algorithm.name === 'ECDSA' && algorithm.namedCurve === 'P-256') {
     capturedKeyPair = result;
@@ -46,16 +60,24 @@ crypto.subtle.generateKey = async (algorithm: any, extractable: boolean, keyUsag
 };
 
 const origFetch = window.fetch.bind(window);
-window.fetch = async function(url: any, options: any) {
+window.fetch = async function (url: any, options: any) {
   // 在请求发送前，捕获页面原始的 x-ent-token 头中的 fp/kid
   captureTokenFromFetchHeaders(options?.headers);
 
   const res = await origFetch(url, options);
-  if (typeof url === 'string' && url.includes('register_pubkey') && capturedKeyPair && !capturedKid) {
+  if (
+    typeof url === 'string' &&
+    url.includes('register_pubkey') &&
+    capturedKeyPair &&
+    !capturedKid
+  ) {
     try {
       const clone = res.clone();
       const text = await clone.text();
-      console.log('[MaimaiHook] register_pubkey 响应体:', text.substring(0, 500));
+      console.log(
+        '[MaimaiHook] register_pubkey 响应体:',
+        text.substring(0, 500)
+      );
       if (text) {
         const data = JSON.parse(text);
         if (data.kid) {
@@ -63,7 +85,9 @@ window.fetch = async function(url: any, options: any) {
           console.log('[MaimaiHook] 截获 kid:', data.kid);
         }
       }
-    } catch(e) { console.warn('[MaimaiHook] 截获kid失败:', e); }
+    } catch (e) {
+      console.warn('[MaimaiHook] 截获kid失败:', e);
+    }
   }
   return res;
 };
@@ -77,12 +101,17 @@ function captureTokenFromFetchHeaders(headers: any): void {
         token = headers.get('x-ent-token');
       } else if (typeof headers === 'object') {
         for (const [k, v] of Object.entries(headers)) {
-          if (k.toLowerCase() === 'x-ent-token') { token = v as string; break; }
+          if (k.toLowerCase() === 'x-ent-token') {
+            token = v as string;
+            break;
+          }
         }
       }
     }
     postTokenInfo(token);
-  } catch(_) { /* 忽略 header 读取错误 */ }
+  } catch (_) {
+    /* 忽略 header 读取错误 */
+  }
 }
 
 // 从 token 中解析 fp/kid 并发送
@@ -94,13 +123,18 @@ function postTokenInfo(token: string | null): void {
     const b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
     const json = JSON.parse(atob(b64));
     if (json.fp && json.kid) {
-      window.postMessage({
-        type: 'MAIMAI_PAGE_TOKEN',
-        fp: json.fp as string,
-        kid: json.kid as string,
-      }, '*');
+      window.postMessage(
+        {
+          type: 'MAIMAI_PAGE_TOKEN',
+          fp: json.fp as string,
+          kid: json.kid as string,
+        },
+        '*'
+      );
     }
-  } catch(_) { /* 解析失败忽略 */ }
+  } catch (_) {
+    /* 解析失败忽略 */
+  }
 }
 
 // Hook XMLHttpRequest: 拦截 x-ent-token header（脉脉可能用 XHR/axios 而非 fetch）
@@ -109,23 +143,30 @@ const origXHROpen = OrigXHR.prototype.open;
 const origXHRSetHeader = OrigXHR.prototype.setRequestHeader;
 const origXHRSend = OrigXHR.prototype.send;
 
-OrigXHR.prototype.open = function(method: string, url: string | URL) {
+OrigXHR.prototype.open = function (method: string, url: string | URL) {
   (this as any).__maimai_url = typeof url === 'string' ? url : url.toString();
   (this as any).__maimai_method = method;
   return origXHROpen.apply(this, arguments as any);
 };
 
-OrigXHR.prototype.setRequestHeader = function(name: string, value: string) {
+OrigXHR.prototype.setRequestHeader = function (name: string, value: string) {
   if (name.toLowerCase() === 'x-ent-token') {
     postTokenInfo(value);
   }
   return origXHRSetHeader.apply(this, arguments as any);
 };
 
-OrigXHR.prototype.send = function(body?: Document | XMLHttpRequestBodyInit | null) {
+OrigXHR.prototype.send = function (
+  body?: Document | XMLHttpRequestBodyInit | null
+) {
   const self = this as any;
   self.addEventListener('readystatechange', () => {
-    if (self.readyState === 4 && self.__maimai_url?.includes('register_pubkey') && capturedKeyPair && !capturedKid) {
+    if (
+      self.readyState === 4 &&
+      self.__maimai_url?.includes('register_pubkey') &&
+      capturedKeyPair &&
+      !capturedKid
+    ) {
       try {
         const text = self.responseText;
         if (text) {
@@ -135,7 +176,9 @@ OrigXHR.prototype.send = function(body?: Document | XMLHttpRequestBodyInit | nul
             console.log('[MaimaiHook] XHR 截获 kid:', data.kid);
           }
         }
-      } catch(e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
     }
   });
   return origXHRSend.apply(this, arguments as any);
@@ -150,7 +193,10 @@ window.addEventListener('message', async (event: any) => {
   // ISOLATED world 中继初始化后，主动来查询 kid
   if (event.data?.type === 'MAIMAI_REQUEST_KID') {
     if (capturedKid) {
-      window.postMessage({ type: 'MAIMAI_KEY_CAPTURED', kid: capturedKid }, '*');
+      window.postMessage(
+        { type: 'MAIMAI_KEY_CAPTURED', kid: capturedKid },
+        '*'
+      );
     }
     return;
   }
@@ -165,23 +211,31 @@ window.addEventListener('message', async (event: any) => {
       const resp = await origFetch(url, init);
       const respText = await resp.text();
       const respHeaders: any = {};
-      resp.headers.forEach((v: string, k: string) => { respHeaders[k] = v; });
-      window.postMessage({
-        type: 'MAIMAI_PROXY_FETCH_RESPONSE',
-        requestId,
-        ok: resp.ok,
-        status: resp.status,
-        statusText: resp.statusText,
-        headers: respHeaders,
-        body: respText,
-      }, '*');
+      resp.headers.forEach((v: string, k: string) => {
+        respHeaders[k] = v;
+      });
+      window.postMessage(
+        {
+          type: 'MAIMAI_PROXY_FETCH_RESPONSE',
+          requestId,
+          ok: resp.ok,
+          status: resp.status,
+          statusText: resp.statusText,
+          headers: respHeaders,
+          body: respText,
+        },
+        '*'
+      );
     } catch (err: any) {
-      window.postMessage({
-        type: 'MAIMAI_PROXY_FETCH_RESPONSE',
-        requestId,
-        ok: false,
-        error: err.message,
-      }, '*');
+      window.postMessage(
+        {
+          type: 'MAIMAI_PROXY_FETCH_RESPONSE',
+          requestId,
+          ok: false,
+          error: err.message,
+        },
+        '*'
+      );
     }
   }
 
@@ -197,17 +251,23 @@ window.addEventListener('message', async (event: any) => {
         new TextEncoder().encode(data)
       );
       const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)));
-      window.postMessage({
-        type: 'MAIMAI_SIGN_RESPONSE',
-        requestId,
-        signature: sigB64,
-      }, '*');
+      window.postMessage(
+        {
+          type: 'MAIMAI_SIGN_RESPONSE',
+          requestId,
+          signature: sigB64,
+        },
+        '*'
+      );
     } catch (err: any) {
-      window.postMessage({
-        type: 'MAIMAI_SIGN_RESPONSE',
-        requestId,
-        error: err.message,
-      }, '*');
+      window.postMessage(
+        {
+          type: 'MAIMAI_SIGN_RESPONSE',
+          requestId,
+          error: err.message,
+        },
+        '*'
+      );
     }
   }
 });
