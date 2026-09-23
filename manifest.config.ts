@@ -105,6 +105,13 @@ export default defineManifest({
       js: ['src/content/sync-html.ts'],
     },
     {
+      // 领英个人主页懒加载打桩（MAIN world，页面脚本前执行）
+      matches: ['*://www.linkedin.com/in/*'],
+      run_at: 'document_start',
+      world: 'MAIN',
+      js: ['src/content/linkedin-observer.ts'],
+    },
+    {
       matches: [
         '*://www.linkedin.com/talent/search*',
         '*://www.linkedin.com/talent/hire/*/discover/recruiterSearch*',
