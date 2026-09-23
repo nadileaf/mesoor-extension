@@ -5,12 +5,9 @@
   "tokenCookieName": "platform-access-token",
   "wsServer": "",
   "backgroundServerHost": "",
-  "spaceServer": "",
   "domainHost": "",
-  "frontendHost": "",
   "actionConfigHost": "",
   "agentHost": "",
   "updateCdnBaseUrl": "",
-  "sourcingAgentUrl": "",
-  "entityRouteMode": ""
+  "sourcingAgentUrl": ""
 }

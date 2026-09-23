@@ -13,7 +13,6 @@ import { filter } from 'rxjs/operators';
 import { v4 as uuid } from 'uuid';
 import browser from 'webextension-polyfill';
 import { env$, wait$ } from '../../models/preference';
-import { buildEntityDetailUrl } from '../../utils/mesoor-entity-url';
 import {
   IDupeCheckTriggerMessage,
   ISyncResumeBaseConfig,
@@ -24,14 +23,7 @@ import {
   isISyncResumeStartMessage,
 } from '../../utils/message-fileter';
 
-// 个人版插件列表
-const personalList = ['薪事力招聘', '易服智享'];
-
-const isPersonalPlug = personalList.includes(
-  browser.runtime.getManifest().name
-);
-
-// 后端 entityType（candidate/job）→ 展示名 / 路由类型
+// 后端 entityType（candidate/job）→ 展示名
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   candidate: '人才库简历',
   Resume: '人才库简历',
@@ -41,10 +33,6 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
 
 function toEntityLabel(entityType?: string): string {
   return (entityType && ENTITY_TYPE_LABELS[entityType]) || '简历';
-}
-
-function toRouteEntityType(entityType?: string): 'Resume' | 'Job' {
-  return entityType === 'job' || entityType === 'Job' ? 'Job' : 'Resume';
 }
 
 // 组件状态接口
@@ -332,9 +320,6 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       isSyncResumeError,
       wait,
       isConfirmSynchronize,
-      env,
-      openId,
-      entityType,
     } = state;
 
     // 查重失败时重试
@@ -342,31 +327,11 @@ export const DupeCheck: React.FC<DupeCheckProps> = ({ className }) => {
       return dupeCheckRetry();
     }
 
-    // 同步完成后的跳转逻辑
+    // 同步完成后的跳转逻辑：后端返回的 viewUrl 必存在，直接打开
     if (isSynchronized && !isSyncResumeError && !isCheckingDupe && !isChecked) {
-      // 优先使用后端返回的跳转 URL
       if (state.redirect?.url) {
         window.open(state.redirect.url);
-        return;
       }
-
-      // 降级到前端构建的跳转逻辑
-      if (isPersonalPlug) {
-        const secondaryDomain = 'mesoor.com';
-        window.open(
-          `https://system.${secondaryDomain}/dashboard#/candidates/search?openid=${openId}`
-        );
-        return;
-      }
-
-      // 企业版跳转到简历详情页
-      if (!openId) return;
-      const url = buildEntityDetailUrl({
-        host: env,
-        entityType: toRouteEntityType(entityType),
-        openId,
-      });
-      window.open(url);
       return;
     }
 

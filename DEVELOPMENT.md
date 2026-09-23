@@ -91,20 +91,17 @@ npm run format:check
   "platformBaseUrl": "https://platform.nadileaf.com",
   "userServicePrefix": "/api/user-proxy",
   "tokenCookieName": "platform-access-token",
-  "wsServer": "wss://web-extension-use.nadileaf.com",
-  "backgroundServerHost": "https://web-extension-use.nadileaf.com",
-  "spaceServer": "https://tip-test.nadileaf.com/api/mesoor-space",
+  "wsServer": "wss://platform-web-extension-use.nadileaf.com",
+  "backgroundServerHost": "https://platform-web-extension-use.nadileaf.com",
   "domainHost": "tip-test.nadileaf.com",
-  "frontendHost": "tip-test.nadileaf.com",
-  "actionConfigHost": "web-extension-use.nadileaf.com",
+  "actionConfigHost": "platform-web-extension-use.nadileaf.com",
   "agentHost": "https://agent.nadileaf.com",
   "updateCdnBaseUrl": "https://cdn-fe.mesoor.com/tip-plugins/mesoor/",
-  "sourcingAgentUrl": "https://agent.nadileaf.com/chat/uo6f9m16c0ymkBTR",
-  "entityRouteMode": "app_path"
+  "sourcingAgentUrl": "https://agent.nadileaf.com/chat/uo6f9m16c0ymkBTR"
 }
 ```
 
-读取逻辑见 `src/utils/runtime-config.ts`（`loadRuntimeConfig()` 在 background 启动时 await，`getRuntimeConfig()` 供组件同步读取）。
+读取逻辑见 `src/utils/runtime-config.ts`：background 启动时 `loadRuntimeConfig()` 只触发加载，读取一律用同步的 `getRuntimeConfig()`（MV3 Service Worker 禁止顶层 await）。
 
 ## 鉴权说明（对齐新前端 platform）
 

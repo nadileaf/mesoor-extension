@@ -1,7 +1,5 @@
 import browser from 'webextension-polyfill';
 
-export type EntityRouteMode = 'legacy_query' | 'app_path';
-
 /**
  * 运行时配置。
  *
@@ -17,14 +15,11 @@ export interface RuntimeConfig {
   tokenCookieName: string;
   wsServer: string;
   backgroundServerHost: string;
-  spaceServer: string;
   domainHost: string;
-  frontendHost: string;
   actionConfigHost: string;
   agentHost: string;
   updateCdnBaseUrl: string;
   sourcingAgentUrl: string;
-  entityRouteMode: EntityRouteMode;
 }
 
 const env = import.meta.env;
@@ -35,26 +30,20 @@ const ENV_DEFAULTS: RuntimeConfig = {
   tokenCookieName: env.VITE_TOKEN_COOKIE_NAME || 'platform-access-token',
   wsServer: env.VITE_WS_SERVER || '',
   backgroundServerHost: env.VITE_BACKGROUND_SERVER_HOST || '',
-  spaceServer: env.VITE_SPACE_SERVER || '',
   domainHost: env.VITE_DOMAIN_HOST || '',
-  frontendHost: env.VITE_FRONTEND_HOST || env.VITE_DOMAIN_HOST || '',
   actionConfigHost: env.VITE_ACTION_CONFIG_HOST || '',
   agentHost: env.VITE_AGENT_HOST || '',
   updateCdnBaseUrl: env.VITE_UPDATE_CDN_BASE_URL || '',
   sourcingAgentUrl: env.VITE_SOURCING_AGENT_URL || '',
-  entityRouteMode:
-    (env.VITE_ENTITY_ROUTE_MODE as EntityRouteMode) || 'legacy_query',
 };
 
-const STRING_KEYS: Array<Exclude<keyof RuntimeConfig, 'entityRouteMode'>> = [
+const STRING_KEYS: Array<keyof RuntimeConfig> = [
   'platformBaseUrl',
   'userServicePrefix',
   'tokenCookieName',
   'wsServer',
   'backgroundServerHost',
-  'spaceServer',
   'domainHost',
-  'frontendHost',
   'actionConfigHost',
   'agentHost',
   'updateCdnBaseUrl',
@@ -74,7 +63,6 @@ function normalizeBaseUrl(url: string): string {
 
 /**
  * 读取扩展内的 config.json（只读一次，带缓存），与构建期默认值合并。
- * 必须在建立 `user$` / socket 等依赖配置的流之前 await。
  */
 export function loadRuntimeConfig(): Promise<RuntimeConfig> {
   if (loading) return loading;
@@ -89,10 +77,6 @@ export function loadRuntimeConfig(): Promise<RuntimeConfig> {
       for (const key of STRING_KEYS) {
         const value = pick(raw[key]);
         if (value) merged[key] = value;
-      }
-      const mode = pick(raw.entityRouteMode);
-      if (mode === 'legacy_query' || mode === 'app_path') {
-        merged.entityRouteMode = mode;
       }
       merged.platformBaseUrl = normalizeBaseUrl(merged.platformBaseUrl);
       current = merged;
