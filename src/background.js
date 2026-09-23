@@ -4667,13 +4667,16 @@ mergedResume$
 
         const { openId, entityType, tenantId, viewUrl } =
           syncEntityResponseData.data ?? {};
+        // 成功时必须返回 viewUrl，否则视为失败
+        if (!viewUrl) {
+          console.error('同步成功但缺少 viewUrl:', syncEntityResponseData);
+          syncResumeFeedbackMsg.payload.isSyncResumeError = true;
+          return;
+        }
         syncResumeFeedbackMsg.payload.openId = openId;
         syncResumeFeedbackMsg.payload.tenant = tenantId;
         syncResumeFeedbackMsg.payload.entityType = entityType;
-        // 后端返回的查看链接，供前端点击跳转
-        if (viewUrl) {
-          syncResumeFeedbackMsg.payload.redirect = { url: viewUrl };
-        }
+        syncResumeFeedbackMsg.payload.redirect = { url: viewUrl };
         return { syncEntityResponse, openId, entityType, tenantId };
       } catch (error) {
         // HTTP 非 200（响应体通常非 JSON）统一提示同步失败
