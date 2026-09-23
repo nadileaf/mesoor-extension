@@ -145,21 +145,31 @@ export const waitForSyncMessage = async (
   tabId: number,
   tabsObject: { [key: string | number]: any },
   wait: boolean = true,
-  requestId: string | undefined = undefined
+  requestId: string | undefined = undefined,
+  timeoutMs: number = 5 * 60 * 1000
 ): Promise<boolean> => {
   if (wait) {
     const queryId: string | number = requestId || tabId;
     return (await new Promise(resolve => {
+      let settled = false;
+      const finish = (result: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        interval$.unsubscribe();
+        delete tabsObject[queryId];
+        resolve(result);
+      };
       const interval$ = interval(200)
         .pipe(
           switchMap(_ => from(isTabIdExists(tabId))),
           filter(isExist => queryId in tabsObject || !isExist)
         )
-        .subscribe(isExist => {
-          interval$.unsubscribe();
-          delete tabsObject[queryId];
-          resolve(isExist);
-        });
+        .subscribe(isExist => finish(isExist));
+      const timer = setTimeout(() => {
+        console.warn('[waitForSyncMessage] 等待确认超时，自动取消:', queryId);
+        finish(false);
+      }, timeoutMs);
     })) as boolean;
   }
   return true;

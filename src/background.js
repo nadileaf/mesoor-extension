@@ -3522,10 +3522,28 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         );
         _replayResponse = await request(replayUrl, opt);
       } else {
-        throw error;
+        // 单次重放失败只跳过该事件，绝不让错误向上传播终止共享流
+        console.error(
+          'resumeSendHeadersV2Base 重放失败，跳过该事件:',
+          details.url,
+          error
+        );
+        requestsHeaderMap.delete(details.requestId);
+        return null;
       }
     }
-    const replayResponse = await _replayResponse.json();
+    let replayResponse;
+    try {
+      replayResponse = await _replayResponse.json();
+    } catch (error) {
+      console.error(
+        'resumeSendHeadersV2Base 解析响应失败，跳过该事件:',
+        details.url,
+        error
+      );
+      requestsHeaderMap.delete(details.requestId);
+      return null;
+    }
     requestsHeaderMap.delete(details.requestId);
     return {
       details: {
@@ -3537,30 +3555,17 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
       headers,
     };
   }),
+  filter(Boolean),
   // tap(({ details }) => {
   //   console.log('重放器执行重放完成', details.url);
   // }),
-  catchError(async error => {
-    console.error('resumeSendHeadersV2Base错误:', error);
-    // 脉脉 401/403: 尝试重新注册公钥
-    if (error?.response?.status && [401, 403].includes(error.response.status)) {
-      const url = error.config?.url || '';
-      if (url.includes('maimai.cn')) {
-        console.warn(
-          '[MaimaiToken] 收到',
-          error.response.status,
-          ', 尝试重新注册...'
-        );
-        try {
-          await maimaiTokenManager.reRegister();
-        } catch (regErr) {
-          console.error('[MaimaiToken] 重新注册失败:', regErr);
-        }
-      }
-    }
-    return of();
-  }),
+  // retry 必须在 catchError 之前：出错时先重新订阅，避免 catchError 把错误
+  // 转成 complete 从而永久终止这个被所有分支共享的源。
   retry(),
+  catchError(error => {
+    console.error('resumeSendHeadersV2Base错误:', error);
+    return EMPTY;
+  }),
   share()
 );
 
@@ -4540,45 +4545,52 @@ const yupaoGouTongResume$ = resumeSendHeadersV2Base$.pipe(
     const otherDetailUrl =
       'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail';
     details.url = otherDetailUrl;
-    const resumeSubUuid = replayResponse.data.infoDetail.relatedInfoId;
-    const requestTimestamp = ''.concat(Date.now());
-    const nonce = ''.concat(Math.round(Math.random() * 999999));
-    const requestBody = {
-      resumeSubUuid,
-      scene: 0,
-    };
+    try {
+      const resumeSubUuid = replayResponse.data.infoDetail.relatedInfoId;
+      const requestTimestamp = ''.concat(Date.now());
+      const nonce = ''.concat(Math.round(Math.random() * 999999));
+      const requestBody = {
+        resumeSubUuid,
+        scene: 0,
+      };
 
-    // 获取签名（处理异步函数）
-    const sign = await createYuPaoSign(requestBody, requestTimestamp, nonce);
-    // 要覆盖 sign 和 timestamp 两个参数
-    const resumeInfoRes = await request(otherDetailUrl, {
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-        sign: sign,
-        timestamp: requestTimestamp,
-        nonce: nonce,
-      },
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    });
-    const resumeInfoData = await resumeInfoRes.json();
+      // 获取签名（处理异步函数）
+      const sign = await createYuPaoSign(requestBody, requestTimestamp, nonce);
+      // 要覆盖 sign 和 timestamp 两个参数
+      const resumeInfoRes = await request(otherDetailUrl, {
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+          sign: sign,
+          timestamp: requestTimestamp,
+          nonce: nonce,
+        },
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      });
+      const resumeInfoData = await resumeInfoRes.json();
 
-    const body = {
-      jsonBody: resumeInfoData,
-      url: otherDetailUrl,
-      fileContentB64: [],
-    };
-    return { details, headers, body };
-  }),
-  catchError(error => {
-    console.error('鱼泡获取简历错误:', error);
-    const body = {
-      jsonBody: replayResponse,
-      url: otherDetailUrl,
-      fileContentB64: [],
-    };
-    return of({ details, headers, body });
+      return {
+        details,
+        headers,
+        body: {
+          jsonBody: resumeInfoData,
+          url: otherDetailUrl,
+          fileContentB64: [],
+        },
+      };
+    } catch (error) {
+      console.error('鱼泡获取简历错误，降级使用原始响应:', error);
+      return {
+        details,
+        headers,
+        body: {
+          jsonBody: replayResponse,
+          url: otherDetailUrl,
+          fileContentB64: [],
+        },
+      };
+    }
   }),
   retry()
 );
@@ -4774,11 +4786,13 @@ mergedResume$
         }
       }
     }),
+    // retry 必须在 catchError 之前：保证末端流水线出错后能重新订阅，
+    // 而不是被 catchError 转成 complete 后永久拆除。
+    retry(),
     catchError(error => {
       console.error('syncResumeFeedbackMsg错误:', error);
-      return of();
+      return EMPTY;
     }),
-    retry(),
     share()
   )
   .subscribe();
