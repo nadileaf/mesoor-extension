@@ -965,9 +965,17 @@ function highlightElements(
     const style = window.getComputedStyle(element);
 
     // Check if element has click-like styling
-    // const hasClickStyling = style.cursor === 'pointer' ||
-    //     element.style.cursor === 'pointer' ||
-    //     style.pointerEvents !== 'none';
+    // cursor:pointer 是站点自定义可点击项（如 liepin 职位弹窗的 div.item）的主要信号。
+    // 注意：不要用 style.pointerEvents !== 'none'，那几乎对所有元素为真。
+    const hasClickStyling =
+      style.cursor === 'pointer' || element.style.cursor === 'pointer';
+
+    // 站点常把可点击项写成 div/span + 语义 class
+    const CLICKABLE_CLASS_HINTS =
+      /(^|[-_ ])(item|option|tag|label|btn|button|cell|card|choice|checkbox|radio|tab)([-_ ]|$)/i;
+    const hasClassHint =
+      typeof element.className === 'string' &&
+      CLICKABLE_CLASS_HINTS.test(element.className);
 
     // Check for event listeners
     const hasClickHandler =
@@ -1044,10 +1052,10 @@ function highlightElements(
 
     return (
       hasAriaProps ||
-      // hasClickStyling ||
+      hasClickStyling ||
+      hasClassHint ||
       hasClickHandler ||
       hasClickListeners ||
-      // isFormRelated ||
       isDraggable
     );
   }
