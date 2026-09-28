@@ -1360,8 +1360,8 @@ function simulateKeypress(options) {
       metaKey: options.meta || false,
     };
 
-    // 聚焦元素（如果指定了元素）
-    if (options.xpath) {
+    // 聚焦元素（如果指定了元素）；注意 xpath 在 options.data 下，不在 options 顶层
+    if (options.data.xpath) {
       targetElement.focus();
     }
 
