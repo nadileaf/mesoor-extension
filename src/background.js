@@ -2996,6 +2996,131 @@ async function injectButton2dify(url, tabId, config, jobId, resumeId) {
 //   retry()
 // );
 
+// —— 各反馈分支「哪条请求才是要收录的那条」判定（单一事实来源）——
+// base 用它们的并集决定是否发 sync-resume-start；各分支复用同一组 matcher 消费，
+// 保证「发 start 的请求集合 == 会产出 sync-resume-feedback 的请求集合」，
+// 手动模式下不会出现「用户确认的请求被下游丢弃 → 永久卡在正在同步」。
+const isLinkedInKeeper = details =>
+  details.url.includes(
+    'www.linkedin.com/talent/api/talentLinkedInMemberProfiles'
+  ) && new URL(details.url).searchParams.size === 0;
+
+const isMaimaiResume = details =>
+  details.url.includes('maimai.cn/sdk/jobs/anti_automation/talent/basic');
+
+const isSubStream = details =>
+  needCacheHeadersUrlSubStream.some(pattern => {
+    const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+    return regex.test(details.url);
+  });
+
+const isBossChat = details =>
+  details.url.includes('www.zhipin.com/wapi/zpchat/boss/historyMsg?');
+
+const isBossInteraction = details =>
+  details.url.includes('www.zhipin.com/wapi/zpjob/view/geek/info/v2');
+
+const isLiepinChenglie = details =>
+  details.url.includes(
+    'api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume'
+  );
+
+const isLiepinChatResume = details =>
+  details.url.includes(
+    'api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail'
+  );
+
+// 智联：URL 命中且请求体不是 skipRead
+const isZhilianResume = details => {
+  if (!details.url.includes('rd6.zhaopin.com/api/resume/detail')) {
+    return false;
+  }
+  try {
+    if (!details?.requestBody?.raw || !details.requestBody.raw.length) {
+      return true;
+    }
+    const rawBytes = details.requestBody.raw[0].bytes;
+    const body = JSON.parse(new TextDecoder().decode(rawBytes));
+    return body.skipRead !== true;
+  } catch (e) {
+    return false;
+  }
+};
+
+// 猎聘企业版：请求体带 applyId 才算收录
+const liepinCompanyBodyAccepted = details => {
+  try {
+    const requestBody = details.requestBody;
+    if (!requestBody) {
+      return false;
+    }
+    if (requestBody.formData) {
+      const pageParamDto = requestBody.formData.pageParamDto;
+      if (!pageParamDto || !pageParamDto[0]) {
+        return false;
+      }
+      try {
+        const paramData = JSON.parse(pageParamDto[0]);
+        return !!(paramData && 'applyId' in paramData);
+      } catch (parseError) {
+        return true; // 解析出错时默认放行
+      }
+    }
+    if (requestBody.raw) {
+      try {
+        const bodyText = decodeURIComponent(
+          String.fromCharCode.apply(
+            null,
+            new Uint8Array(requestBody.raw[0].bytes)
+          )
+        );
+        const bodyData = JSON.parse(bodyText);
+        const pageParamDto = bodyData && bodyData.pageParamDto;
+        if (!pageParamDto) {
+          return false;
+        }
+        const paramData =
+          typeof pageParamDto === 'string'
+            ? JSON.parse(pageParamDto)
+            : pageParamDto;
+        return !!(paramData && 'applyId' in paramData);
+      } catch (parseError) {
+        return true; // 解析出错时默认放行
+      }
+    }
+    return false;
+  } catch (error) {
+    return true; // 出错时默认放行
+  }
+};
+
+const isLiepinCompany = details =>
+  details.url.includes(
+    'api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail'
+  ) && liepinCompanyBodyAccepted(details);
+
+const isYupao = details =>
+  details.url.includes('yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2');
+
+const FEEDBACK_MATCHERS = [
+  isLinkedInKeeper,
+  isMaimaiResume,
+  isSubStream,
+  isBossChat,
+  isBossInteraction,
+  isLiepinChenglie,
+  isZhilianResume,
+  isLiepinCompany,
+  isLiepinChatResume,
+  isYupao,
+];
+const willProduceFeedback = details =>
+  FEEDBACK_MATCHERS.some(matcher => matcher(details));
+
+// 只回放、不提示也不反馈（chat-list 仅用于缓存附件参数）
+const isSilentReplay = details =>
+  details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list');
+
 // 以下请求会缓存header 不含预检请求
 const cacheHeaders$ =
   RequestListen.installOnBeforeSendHeaders(needCacheHeadersUrl);
@@ -3005,11 +3130,11 @@ cacheHeaders$
     // tap(details => {
     //   console.log('step 1 cacheHeaders details', details);
     // }),
+    retry(),
     catchError(error => {
       console.error('cacheHeaders错误:', error);
       return of();
-    }),
-    retry()
+    })
   )
   .subscribe(async details => {
     requestsHeaderMap.set(details.requestId, {
@@ -3018,6 +3143,11 @@ cacheHeaders$
       timeStamp: details.timeStamp,
       headers: details.requestHeaders,
     });
+    // 被跳过的请求（如领英预览）不会走到删除逻辑，这里按数量上限清理，避免 Map 无限增长
+    while (requestsHeaderMap.size > 1000) {
+      const oldestKey = requestsHeaderMap.keys().next().value;
+      requestsHeaderMap.delete(oldestKey);
+    }
   });
 /**
  * 在 page context 里执行 fetch（解决 maimai sec-fetch-site 检测）
@@ -3334,10 +3464,15 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   //   console.log('step 2.0 cacheHeaders details', details);
   // }),
   mergeMap(async details => {
-    // 手动模式下：先等待用户确认，再执行重放
+    const producesFeedback = willProduceFeedback(details);
+    // 既不会被任何分支收录、也无需静默回放（如领英预览请求）→ 直接丢弃，不重放
+    if (!producesFeedback && !isSilentReplay(details)) {
+      return null;
+    }
+    // 手动模式下：只对会被收录的请求等待用户确认，再执行重放
     let preconfirmed = false;
     let preconfirmedRequestId = null;
-    if (wait) {
+    if (wait && producesFeedback) {
       preconfirmed = true;
       preconfirmedRequestId = uuid();
       const syncResumeStartMessage = {
@@ -3357,7 +3492,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
         preconfirmedRequestId
       );
       if (!confirmed) {
-        return EMPTY;
+        return null;
       }
     }
     // 必须的延迟，否则会出错
@@ -3571,11 +3706,7 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
 
 // 脉脉请求重放流 - 使用缓存的请求头（x-csrf-token, x-ent-token）
 const maimaiResumeReplay$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) => {
-    return details.url.includes(
-      'maimai.cn/sdk/jobs/anti_automation/talent/basic'
-    );
-  }),
+  filter(({ details }) => isMaimaiResume(details)),
   map(response => {
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
@@ -3626,18 +3757,16 @@ const maimaiResumeReplay$ = resumeSendHeadersV2Base$.pipe(
     };
     return { details, headers, body };
   }),
+  retry(),
   catchError(error => {
     console.error('maimaiResumeReplay错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 
 // 互动+推荐
 const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) => {
-    return details.url.includes('www.zhipin.com/wapi/zpjob/view/geek/info/v2');
-  }),
+  filter(({ details }) => isBossInteraction(details)),
   map(response => {
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
@@ -3717,11 +3846,11 @@ const bossInteractionRecommend$ = resumeSendHeadersV2Base$.pipe(
     };
     return { details, headers, body };
   }),
+  retry(),
   catchError(error => {
     console.error('bossInteractionRecommend 错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 
 // 猎聘诚猎通-非沟通需要把工作经历的请求拼出来
@@ -3730,11 +3859,7 @@ const liePinChengLieTongPageResume$ = resumeSendHeadersV2Base$.pipe(
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
   }),
-  filter(({ details }) =>
-    details.url.includes(
-      'api-h.liepin.com/api/com.liepin.rresume.userh.pc.old.get-resume'
-    )
-  ),
+  filter(({ details }) => isLiepinChenglie(details)),
   mergeMap(async ({ details, replayResponse, headers }) => {
     try {
       const cnResIdEncode = replayResponse.data.cnResIdEncode;
@@ -3773,23 +3898,7 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
   }),
-  filter(({ details }) =>
-    details.url.includes('rd6.zhaopin.com/api/resume/detail')
-  ),
-  filter(({ details }) => {
-    try {
-      if (!details?.requestBody?.raw || !details.requestBody.raw.length) {
-        return true;
-      }
-      const rawBytes = details.requestBody.raw[0].bytes;
-      const requestBodyText = new TextDecoder().decode(rawBytes);
-      const body = JSON.parse(requestBodyText);
-      return body.skipRead !== true;
-    } catch (e) {
-      // 解析失败，直接过滤，
-      return false;
-    }
-  }),
+  filter(({ details }) => isZhilianResume(details)),
   mergeMap(async ({ details, replayResponse, headers }) => {
     try {
       const url = new URL(details.url);
@@ -3859,23 +3968,17 @@ const zhilianAttachmentResume$ = resumeSendHeadersV2Base$.pipe(
       };
     }
   }),
+  retry(),
   catchError(error => {
     console.error('zhilianAttachmentResume错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
   // tap(({ details }) => {
   //   console.log('resumeSendHeadersV2BaseSub$', details);
   // }),
-  filter(({ details }) => {
-    // 如果命中了 needCacheHeadersUrlSubStream里面的url就继续执行
-    return needCacheHeadersUrlSubStream.some(pattern => {
-      const regex = new RegExp(pattern.replace(/\*/g, '.*'));
-      return regex.test(details.url);
-    });
-  }),
+  filter(({ details }) => isSubStream(details)),
   mergeMap(async ({ details, replayResponse }) => {
     let fileContentB64 = [];
     try {
@@ -3928,11 +4031,11 @@ const resumeSendHeadersV2BaseSub$ = resumeSendHeadersV2Base$.pipe(
     const headers = {};
     return { details, headers, body };
   }),
+  retry(),
   catchError(error => {
     console.error('resumeSendHeadersV2BaseSub错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 
 // 领英企业账户搜索页-获取联系方式
@@ -3941,20 +4044,7 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
   }),
-  filter(({ details }) => {
-    const isLinkedInProfileUrl = details.url.includes(
-      'www.linkedin.com/talent/api/talentLinkedInMemberProfiles'
-    );
-    return isLinkedInProfileUrl;
-  }),
-
-  filter(({ details }) => {
-    // 实际上领英获取一次简历会调用三次这个接口，这里过滤掉取一个
-    // 领英搜索页
-    const urlObj = new URL(details.url);
-    const hasParams = urlObj.searchParams.size != 0;
-    return !hasParams;
-  }),
+  filter(({ details }) => isLinkedInKeeper(details)),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const csrfToken = headers['Csrf-Token'];
     let match;
@@ -4002,17 +4092,15 @@ const linkedInContactResume$ = resumeSendHeadersV2Base$.pipe(
     };
     return { details, headers, body };
   }),
+  retry(),
   catchError(error => {
     console.error('领英获取联系方式错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 // 沟通
 const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) => {
-    return details.url.includes('www.zhipin.com/wapi/zpchat/boss/historyMsg?');
-  }),
+  filter(({ details }) => isBossChat(details)),
   map(response => {
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
@@ -4110,17 +4198,15 @@ const bossCommunication$ = resumeSendHeadersV2Base$.pipe(
     }
     return { details, headers, body };
   }),
+  retry(),
   catchError(error => {
     console.error('bossCommunication错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 // 聊天历史已经包含附件快照参数，不需要用户点击附件。
 const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) =>
-    details.url.includes('api-h.liepin.com/api/com.liepin.im.h.chat.chat-list')
-  ),
+  filter(({ details }) => isSilentReplay(details)),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const paramsList = findLiepinAttachmentParams(replayResponse);
     const cacheableParams = paramsList.filter(
@@ -4143,6 +4229,7 @@ const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
     return null;
   }),
   filter(Boolean),
+  retry(),
   catchError(error => {
     console.error('猎聘聊天历史附件处理错误:', error);
     return of();
@@ -4151,11 +4238,7 @@ const liepinChatAttachment$ = resumeSendHeadersV2Base$.pipe(
 
 // 猎聘聊天页简历详情；附件参数来自 chat-list，按候选人精确关联。
 const liepinChatResume$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) =>
-    details.url.includes(
-      'api-h.liepin.com/api/com.liepin.im.h.contact.im-resume-detail'
-    )
-  ),
+  filter(({ details }) => isLiepinChatResume(details)),
   mergeMap(async ({ details, replayResponse, headers }) => {
     try {
       const params = findLiepinCachedAttachmentParams(
@@ -4252,103 +4335,7 @@ const liepinChatResume$ = resumeSendHeadersV2Base$.pipe(
 let requestCount = 0; // 用于记录请求次数
 const RESET_TIMEOUT = 10000; // 10秒后重置计数器
 const liepinCompanyResume$ = resumeSendHeadersV2Base$.pipe(
-  filter(({ details }) => {
-    return details.url.includes(
-      'api-lpt.liepin.com/api/com.liepin.rresume.usere.pc.get-resume-detail'
-    );
-  }),
-  filter(({ details }) => {
-    try {
-      // 获取请求体
-      const requestBody = details.requestBody;
-
-      // 如果没有请求体，过滤掉
-      if (!requestBody) {
-        console.log('请求没有请求体，过滤掉');
-        return false;
-      }
-
-      // 检查是否是formdata
-      if (requestBody.formData) {
-        // 获取pageParamDto字段
-        const pageParamDto = requestBody.formData.pageParamDto;
-
-        if (!pageParamDto || !pageParamDto[0]) {
-          console.log('请求没有pageParamDto字段，过滤掉');
-          return false;
-        }
-
-        try {
-          // 解析pageParamDto内的JSON
-          const paramData = JSON.parse(pageParamDto[0]);
-
-          // 检查是否存在applyId这个键，不管值是什么
-          const hasApplyIdKey = paramData && 'applyId' in paramData;
-
-          if (hasApplyIdKey) {
-            console.log('请求存在applyId键，处理该请求:', paramData.applyId);
-            return true;
-          } else {
-            console.log('请求不存在applyId键，过滤掉');
-            return false;
-          }
-        } catch (parseError) {
-          console.error('解析pageParamDto出错:', parseError);
-          return true; // 解析出错时默认放行
-        }
-      }
-      // 如果是raw格式
-      else if (requestBody.raw) {
-        try {
-          // 解析请求体内容
-          const bodyText = decodeURIComponent(
-            String.fromCharCode.apply(
-              null,
-              new Uint8Array(requestBody.raw[0].bytes)
-            )
-          );
-
-          // 尝试解析为JSON
-          const bodyData = JSON.parse(bodyText);
-
-          // 检查pageParamDto字段
-          const pageParamDto = bodyData && bodyData.pageParamDto;
-
-          if (!pageParamDto) {
-            console.log('raw请求没有pageParamDto字段，过滤掉');
-            return false;
-          }
-
-          // 如果pageParamDto是字符串，尝试解析为JSON
-          const paramData =
-            typeof pageParamDto === 'string'
-              ? JSON.parse(pageParamDto)
-              : pageParamDto;
-
-          // 检查是否存在applyId这个键，不管值是什么
-          const hasApplyIdKey = paramData && 'applyId' in paramData;
-
-          if (hasApplyIdKey) {
-            console.log('raw请求存在applyId键，处理该请求:', paramData.applyId);
-            return true;
-          } else {
-            console.log('raw请求不存在applyId键，过滤掉');
-            return false;
-          }
-        } catch (parseError) {
-          console.error('解析raw请求体出错:', parseError);
-          return true; // 解析出错时默认放行
-        }
-      } else {
-        console.log('请求体格式不支持，过滤掉');
-        return false;
-      }
-    } catch (error) {
-      console.error('处理请求体时出错:', error);
-      // 出错时默认放行
-      return true;
-    }
-  }),
+  filter(({ details }) => isLiepinCompany(details)),
   map(response => {
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
@@ -4455,11 +4442,11 @@ const htmlSync$ = message$.pipe(
 
     return { details, headers, body };
   }),
+  retry(),
   catchError(error => {
     console.error('HTML获取错误:', error);
     return of();
-  }),
-  retry()
+  })
 );
 
 function ne(ie) {
@@ -4538,9 +4525,7 @@ const yupaoGouTongResume$ = resumeSendHeadersV2Base$.pipe(
     const { details, replayResponse, headers } = response;
     return { details, replayResponse, headers };
   }),
-  filter(({ details }) =>
-    details.url.includes('yupao-prod.yupaowang.com/reach/v2/im/chat/detailV2')
-  ),
+  filter(({ details }) => isYupao(details)),
   mergeMap(async ({ details, replayResponse, headers }) => {
     const otherDetailUrl =
       'https://yupao-prod.yupaowang.com/resume/v3/detail/pc/otherDetail';
