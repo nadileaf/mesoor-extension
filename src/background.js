@@ -3438,6 +3438,41 @@ const getLiepinAttachmentParams = (tabId, resumeId) => {
   return null;
 };
 
+// 后端当前仅支持以下平台的简历收录重放，其余平台先关掉（把 host 加回数组即可恢复）
+const resumeSyncAllowedHosts = [
+  'api-h.liepin.com', // 猎聘诚猎通
+  'api-rcn.duolie.com', // 猎聘多猎
+  'www.zhipin.com', // boss直聘
+  'www.linkedin.com', // 领英
+  'maimai.cn', // 脉脉
+];
+const isResumeSyncAllowed = details => {
+  try {
+    return resumeSyncAllowedHosts.includes(new URL(details.url).hostname);
+  } catch {
+    return false;
+  }
+};
+// 自检：保留 5 个平台，拒绝其余平台
+console.assert(
+  [
+    'https://api-h.liepin.com/x',
+    'https://api-rcn.duolie.com/x',
+    'https://www.zhipin.com/x',
+    'https://www.linkedin.com/x',
+    'https://maimai.cn/x',
+  ].every(url => isResumeSyncAllowed({ url })) &&
+    [
+      'https://rd6.zhaopin.com/x',
+      'https://cupid.51job.com/x',
+      'https://jianli.58.com/x',
+      'https://hr-api-v2.shixiseng.com/x',
+      'https://yupao-prod.yupaowang.com/x',
+      'https://api-lpt.liepin.com/x',
+    ].every(url => !isResumeSyncAllowed({ url })),
+  '[resumeSync] isResumeSyncAllowed 白名单异常'
+);
+
 // 这个是重放器，配置的URL会执行重放
 const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
   needCacheHeadersUrl
@@ -3451,6 +3486,8 @@ const resumeSendHeadersV2Base$ = RequestListen.installOnBeforeRequest(
     }
     return true;
   }),
+  // 仅保留后端已支持平台的收录重放，其余平台直接跳过（不重放/不提示/不发后端）
+  filter(details => isResumeSyncAllowed(details)),
   // 用 tabId+url+method 检测回环，在 filter 层直接拦截
   filter(details => {
     const pendingKey = `${details.tabId}|${details.url}|${(details.method || 'GET').toUpperCase()}`;
