@@ -246,7 +246,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
         const iframe = await createIframe({
           'sys.user_id': payload.userId,
           user_id: payload.userId,
-          token: _token,
           tenantId: payload.tenantAlias,
         });
 
